@@ -1,21 +1,33 @@
-FROM python:3.8-slim
+# PICO-8 Percept API. The rendered clips and catalog.json are baked in, so an
+# image tag pins exactly which songs are being evaluated.
+FROM python:3.13-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    APP_ENV=production \
+    DATA_DIR=/data \
+    CATALOG_PATH=/app/catalog/catalog.json \
+    AUDIO_DIR=/app/catalog/audio
 
 WORKDIR /app
+COPY requirements.txt .
+RUN pip install -r requirements.txt \
+ && useradd --system --uid 10001 --no-create-home --shell /usr/sbin/nologin app \
+ && mkdir /data && chown 10001:10001 /data
 
-COPY . .
+COPY app ./app
+COPY catalog/catalog.json ./catalog/catalog.json
+COPY catalog/audio ./catalog/audio
 
-RUN pip install --upgrade pip && pip install --no-cache-dir -r requirements.txt
+USER 10001
+EXPOSE 8000
+VOLUME /data
 
-COPY certs/cert.pem certs/key.pem /app/certs/
-
-ENV FLASK_APP=app.server
-ENV FLASK_ENV=HML
-ENV FLASK_RUN_CERT=/app/certs/cert.pem
-ENV FLASK_RUN_KEY=/app/certs/key.pem
-
-EXPOSE 5000
-
-COPY entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
-
-CMD ["/entrypoint.sh"]
+# One worker on purpose: SQLite, the in-memory rate limiter and the lock that
+# serializes pair assignment all assume a single process. Threads cover the
+# concurrency a listening test needs.
+CMD ["gunicorn", "app.wsgi:app", "--bind", "0.0.0.0:8000", "--workers", "1", "--threads", "8", \
+     "--worker-tmp-dir", "/tmp", "--no-control-socket", "--timeout", "30", "--graceful-timeout", "10", \
+     "--limit-request-line", "2048", "--limit-request-fields", "50", "--error-logfile", "-"]

@@ -1,21 +1,49 @@
+"""Configuration, read from the environment.
+
+Every value has a development default except PARTICIPANT_ID_SECRET, which is
+required when APP_ENV=production: it is the key that turns an e-mail address
+into a participant id, so a default would make the ids reversible by anyone
+who reads this file.
+"""
+
 import os
+from pathlib import Path
 
-basedir = os.path.abspath(os.path.dirname(__file__))
+ROOT = Path(__file__).resolve().parent.parent
 
-project_root = os.path.dirname(basedir)
 
-class Config:
-    SQLALCHEMY_TRACK_MODIFICATIONS = False
-    S3_BUCKET = os.getenv('S3_BUCKET', 'pairs-files')
-    S3_KEY = os.getenv('S3_KEY', 'tracks.json')
-    S3_REGION = os.getenv('S3_REGION', 'us-east-1')
+def _int(name, default):
+    return int(os.environ.get(name, str(default)))
 
-class DevelopmentConfig(Config):
-    # DEBUG = True
 
-    db_directory = os.path.join(project_root, 'database')
-    os.makedirs(db_directory, exist_ok=True)
-    SQLALCHEMY_DATABASE_URI = 'sqlite:///' + os.path.join(project_root, 'database', 'local_dev.db')
+def load_config():
+    env = os.environ.get("APP_ENV", "development")
+    data_dir = Path(os.environ.get("DATA_DIR", ROOT / "data"))
+    secret = os.environ.get("PARTICIPANT_ID_SECRET", "")
+    if env == "production" and len(secret) < 32:
+        raise RuntimeError("PARTICIPANT_ID_SECRET must be set (32+ characters) in production")
+    if not secret:
+        secret = "development-only-secret-do-not-use-in-production"
 
-class ProductionConfig(Config):
-    SQLALCHEMY_DATABASE_URI = 'postgresql+psycopg2://postgres:adcruim123!@survey-database-hml.cqze80s4i0mc.us-east-1.rds.amazonaws.com/survey_responses_hml'
+    return {
+        "APP_ENV": env,
+        "DATA_DIR": data_dir,
+        "CATALOG_PATH": Path(os.environ.get("CATALOG_PATH", ROOT / "catalog" / "catalog.json")),
+        "AUDIO_DIR": Path(os.environ.get("AUDIO_DIR", ROOT / "catalog" / "audio")),
+        "SQLALCHEMY_DATABASE_URI": os.environ.get(
+            "DATABASE_URL", "sqlite:///" + str(data_dir / "survey.db")
+        ),
+        "SQLALCHEMY_TRACK_MODIFICATIONS": False,
+        "PARTICIPANT_ID_SECRET": secret,
+        # Pairs each participant hears per generative system, plus the anchor pair.
+        "PAIRS_PER_SYSTEM": _int("PAIRS_PER_SYSTEM", 3),
+        # Hard cap on registrations, so a flood of fake e-mails cannot grow the
+        # database without bound.
+        "MAX_PARTICIPANTS": _int("MAX_PARTICIPANTS", 5000),
+        # Requests carry a few small JSON fields; nothing legitimate is bigger.
+        "MAX_CONTENT_LENGTH": 16 * 1024,
+        "RATELIMIT_STORAGE_URI": os.environ.get("RATELIMIT_STORAGE_URI", "memory://"),
+        "RATELIMIT_ENABLED": os.environ.get("RATELIMIT_ENABLED", "1") == "1",
+        "RATELIMIT_HEADERS_ENABLED": True,
+        "JSON_SORT_KEYS": False,
+    }

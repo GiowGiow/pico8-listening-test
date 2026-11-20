@@ -1,95 +1,79 @@
-import enum
+"""Database models.
+
+All timestamps are naive UTC. The original server declared
+``default=datetime.now()``, which calls now() once at import time, so every row
+got the moment the process started instead of the moment it was written. Here
+every default is the function itself (``default=utcnow``), evaluated per row.
+"""
+
 import uuid
-from datetime import datetime
-import sqlalchemy.dialects.postgresql as pg
+from datetime import datetime, timezone
 
-from app.repository import db
+from .db import db
 
-class SongType(str, enum.Enum):
-    human = 'human'
-    genai = 'genai'
 
-class ExperimentType(str, enum.Enum):
-    rq1 = 'rq1'
-    random = 'random'
-    default = 'default'
+def utcnow():
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
 
 class Song(db.Model):
-    id = db.Column(db.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    name = db.Column(db.String(255), nullable=False)
-    type = db.Column(db.Enum(SongType), nullable=False)
-    experiment = db.Column(db.Enum(ExperimentType), nullable=False)
-    count = db.Column(db.Integer, default=0)
+    # Opaque public id; it is also the audio file name, so it must not reveal
+    # whether the clip is human or generated.
+    id = db.Column(db.String(32), primary_key=True)
+    # "real" for human-composed songs, otherwise the generative system name.
+    system = db.Column(db.String(64), nullable=False, index=True)
+    kind = db.Column(db.String(8), nullable=False)  # "human" | "genai"
+    role = db.Column(db.String(8), nullable=False, default="pool")  # "pool" | "anchor"
+    source_id = db.Column(db.String(255), nullable=False)
+    count = db.Column(db.Integer, nullable=False, default=0)
+    active = db.Column(db.Boolean, nullable=False, default=True)
 
-class Pair(db.Model):
-    id = db.Column(db.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    trackA_id = db.Column(db.String(36), db.ForeignKey('song.id'), nullable=False)
-    trackB_id = db.Column(db.String(36), db.ForeignKey('song.id'), nullable=False)
-    experiment = db.Column(db.Enum(ExperimentType), nullable=False)
-    count = db.Column(db.Integer, default=0)
 
-    # relationships
-    trackA = db.relationship('Song', foreign_keys=[trackA_id])
-    trackB = db.relationship('Song', foreign_keys=[trackB_id])
+class Participant(db.Model):
+    # HMAC of the normalized e-mail; the address itself is never stored.
+    id = db.Column(db.String(36), primary_key=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=utcnow)
+    ui_locale = db.Column(db.String(8))
+    age = db.Column(db.Integer)
+    language = db.Column(db.String(32))
+    practical_experience = db.Column(db.Integer)
+    formal_experience = db.Column(db.Integer)
+    knows_ai_music = db.Column(db.Boolean)
+    chiptune_familiarity = db.Column(db.Integer)
+    profile_completed_at = db.Column(db.DateTime)
+
+    responses = db.relationship(
+        "Response", back_populates="participant", order_by="Response.position", lazy="select"
+    )
 
 
 class Response(db.Model):
     id = db.Column(db.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    uuid = db.Column(db.String(36), nullable=False)
-    track_A = db.Column(db.String(50))
-    track_B = db.Column(db.String(50))
+    participant_id = db.Column(db.String(36), db.ForeignKey("participant.id"), nullable=False, index=True)
+    position = db.Column(db.Integer, nullable=False)
+    track_a_id = db.Column(db.String(32), db.ForeignKey("song.id"), nullable=False)
+    track_b_id = db.Column(db.String(32), db.ForeignKey("song.id"), nullable=False)
+    # Generative system of the pair, or "anchor" for the pair everyone hears.
+    pair_kind = db.Column(db.String(64), nullable=False)
+
+    # 0 none, 1 track 1 is AI, 2 track 2 is AI, 3 both, 4 cannot tell
     human_perception = db.Column(db.Integer)
+    # 0 none, 1 recognizes track 1, 2 track 2, 3 both
     song_recognition = db.Column(db.Integer)
     comments = db.Column(db.Text)
-    is_last_response = db.Column(db.Boolean, default=False)
-    time_spent = db.Column(db.Integer)
-    timestamp = db.Column(db.DateTime, default=datetime.now())
+    time_spent_ms = db.Column(db.Integer)
+    listened_a_s = db.Column(db.Float)
+    listened_b_s = db.Column(db.Float)
 
-    def __repr__(self):
-        return (f"<Response(id={self.id}, "
-                f"uuid={self.uuid}, "
-                f"track_A={self.track_A}, "
-                f"track_B={self.track_B}, "
-                f"human_perception={self.human_perception}, "
-                f"is_last_response={self.is_last_response}, "
-                f"comments={self.comments}, "
-                f"timestamp={self.timestamp})>")
+    assigned_at = db.Column(db.DateTime, nullable=False, default=utcnow)
+    answered_at = db.Column(db.DateTime)
 
-    def is_completed(self):
-        """Check if this response has been completed"""
-        return self.human_perception is not None
+    participant = db.relationship("Participant", back_populates="responses")
+    track_a = db.relationship("Song", foreign_keys=[track_a_id])
+    track_b = db.relationship("Song", foreign_keys=[track_b_id])
 
-class User(db.Model):
-    uuid = db.Column(db.String(36), primary_key=True, unique=True)
-    language = db.Column(db.String(36))
-    age = db.Column(db.Integer)
-    practical_experience = db.Column(db.Integer)
-    formal_experience = db.Column(db.Integer)
-    knows_ai_music = db.Column(db.Boolean, default=False)
+    __table_args__ = (db.UniqueConstraint("participant_id", "position", name="uq_response_position"),)
 
-    def __repr__(self):
-        return f"User(uuid={self.uuid}, language={self.language}, age={self.age}, practical_experience={self.practical_experience}, formal_experience={self.formal_experience})"
-
-    def has_completed_all_responses(self):
-        """Check if user has completed all their assigned responses"""
-        user_responses = Response.query.filter_by(uuid=self.uuid).all()
-        if not user_responses:
-            return False
-
-        completed_responses = [r for r in user_responses if r.human_perception is not None]
-        return len(completed_responses) == len(user_responses)
-
-    def get_incomplete_responses(self):
-        """Get list of incomplete responses for this user"""
-        return Response.query.filter_by(uuid=self.uuid, human_perception=None).all()
-
-    def can_submit_more_responses(self):
-        """Check if user can submit more responses"""
-        return len(self.get_incomplete_responses()) > 0
-
-    def has_been_fully_registered(self):
-        """Check if the user has been fully registered"""
-        return self.language is not None and \
-            self.practical_experience is not None and \
-            self.formal_experience is not None and \
-            self.age is not None
+    @property
+    def answered(self):
+        return self.answered_at is not None
