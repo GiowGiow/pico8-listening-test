@@ -212,3 +212,20 @@ def test_rate_limit_on_registration(tmp_path):
     assert codes[5] == 429
     other = c.post("/api/participants", json={"email": "y@example.com"}, headers={"CF-Connecting-IP": "203.0.113.10"})
     assert other.status_code == 200
+
+
+def test_side_and_order_are_random(app, client):
+    with app.app_context():
+        app.config["MAX_PARTICIPANTS"] = 10_000
+    genai_on_a, total, first_kinds = 0, 0, set()
+    for i in range(60):
+        pid = register(client, f"side{i}@example.com")
+        client.get("/api/session", headers={"X-Participant-Id": pid})
+        with app.app_context():
+            rows = Response.query.filter_by(participant_id=pid).order_by(Response.position).all()
+            first_kinds.add(rows[0].pair_kind)
+            for r in rows[:-1]:
+                total += 1
+                genai_on_a += r.track_a.kind == "genai"
+    assert 0.4 < genai_on_a / total < 0.6
+    assert first_kinds == set(SYSTEMS)
