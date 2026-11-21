@@ -1,5 +1,5 @@
 ---
-// Decorative: two 32-step rows like a tracker pattern, one per track color.
+// Decorative: two 32-step rows like a tracker pattern, same color for both.
 // The lit steps are fixed, not taken from any clip.
 const rows = [
   "x..x..x.x...x..xx..x..x.x..x.x..",
@@ -8,7 +8,7 @@ const rows = [
 ---
 <div class="hero-rows" aria-hidden="true">
   {rows.map((row, r) => (
-    <div class="hero-row" data-track={r + 1}>
+    <div class="hero-row">
       <span class="hero-row-label mono">{r + 1}</span>
       <div class="hero-row-steps">
         {[...row].map((c, i) => <span data-on={c === "x" ? "true" : "false"} data-beat={i % 4 === 0 ? "true" : "false"} />)}

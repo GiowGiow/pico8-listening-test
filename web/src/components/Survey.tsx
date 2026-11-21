@@ -110,18 +110,18 @@ export default function Survey() {
     heading.current?.focus();
   }
 
-  const aiOptions: [number, string, 1 | 2 | undefined][] = [
-    [1, m.survey_q_ai_track1(), 1],
-    [2, m.survey_q_ai_track2(), 2],
-    [3, m.survey_q_ai_both(), undefined],
-    [0, m.survey_q_ai_none(), undefined],
-    [4, m.survey_q_ai_unsure(), undefined],
+  const aiOptions: [number, string][] = [
+    [1, m.survey_q_ai_track1()],
+    [2, m.survey_q_ai_track2()],
+    [3, m.survey_q_ai_both()],
+    [0, m.survey_q_ai_none()],
+    [4, m.survey_q_ai_unsure()],
   ];
-  const knownOptions: [number, string, 1 | 2 | undefined][] = [
-    [0, m.survey_q_known_none(), undefined],
-    [1, m.survey_q_known_track1(), 1],
-    [2, m.survey_q_known_track2(), 2],
-    [3, m.survey_q_known_both(), undefined],
+  const knownOptions: [number, string][] = [
+    [0, m.survey_q_known_none()],
+    [1, m.survey_q_known_track1()],
+    [2, m.survey_q_known_track2()],
+    [3, m.survey_q_known_both()],
   ];
 
   return (
@@ -154,8 +154,8 @@ export default function Survey() {
         <fieldset className="question">
           <legend>{m.survey_q_ai()}</legend>
           <div className="options">
-            {aiOptions.map(([value, label, track]) => (
-              <label key={value} className="option" data-track={track}>
+            {aiOptions.map(([value, label]) => (
+              <label key={value} className="option">
                 <input
                   type="radio"
                   name="human_perception"
@@ -172,8 +172,8 @@ export default function Survey() {
         <fieldset className="question">
           <legend>{m.survey_q_known()}</legend>
           <div className="options">
-            {knownOptions.map(([value, label, track]) => (
-              <label key={value} className="option" data-track={track}>
+            {knownOptions.map(([value, label]) => (
+              <label key={value} className="option">
                 <input
                   type="radio"
                   name="song_recognition"

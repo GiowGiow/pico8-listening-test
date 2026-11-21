@@ -114,7 +114,7 @@ export default function TrackPlayer({ track, src, onListened }: Props) {
   const label = playing ? m.survey_pause({ n: track }) : m.survey_play({ n: track });
 
   return (
-    <section className="screen track" data-track={track} aria-label={m.survey_track({ n: track })}>
+    <section className="screen track" aria-label={m.survey_track({ n: track })}>
       <div className="track-head">
         <span className="track-name">{m.survey_track({ n: track })}</span>
         <span className="track-heard" data-heard={heard ? "true" : "false"}>

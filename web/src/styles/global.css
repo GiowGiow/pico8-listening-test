@@ -7,8 +7,9 @@
 
 /*
  * Tokens. Every color is one of the 16 colors of the PICO-8 palette.
- * Track 1 is always blue and track 2 always pink: the player, the answer
- * options and the logo use the same pair, so the color says which track.
+ * Both tracks share one neutral color on purpose: a warm or cool color tied to
+ * one track could nudge which one people call human or AI. Tracks differ only
+ * by their number.
  */
 :root {
   --p8-black: #000000;
@@ -31,8 +32,7 @@
   --ink-soft: var(--p8-gray);
   --line: var(--p8-gray-dark);
   --accent: var(--p8-yellow);
-  --track-1: var(--p8-blue);
-  --track-2: var(--p8-pink);
+  --track: var(--p8-gray);
   --ok: var(--p8-green);
   --danger: var(--p8-red);
 
@@ -306,12 +306,6 @@ fieldset.question legend {
   cursor: pointer;
   user-select: none;
 }
-.option[data-track="1"] {
-  --option-color: var(--track-1);
-}
-.option[data-track="2"] {
-  --option-color: var(--track-2);
-}
 .option input {
   appearance: none;
   flex: none;
@@ -342,13 +336,11 @@ fieldset.question legend {
 /* --- track player: the signature ------------------------------------------- */
 
 /* Each clip is drawn as the 32 steps of a PICO-8 SFX: the steps light up in
-   the track's color as it plays, and clicking a step seeks there. */
+   the same neutral color for both tracks as it plays, and clicking a step
+   seeks there. */
 .track {
-  --track-color: var(--track-1);
+  --track-color: var(--track);
   padding: 1rem 1.1rem 1.1rem;
-}
-.track[data-track="2"] {
-  --track-color: var(--track-2);
 }
 .track-head {
   display: flex;
@@ -361,7 +353,7 @@ fieldset.question legend {
   font-family: var(--font-display);
   font-weight: 700;
   font-size: 1.25rem;
-  color: var(--track-color);
+  color: var(--ink);
 }
 .track-heard {
   font-family: var(--font-mono);
@@ -499,13 +491,10 @@ fieldset.question legend {
   padding-right: 3.5rem;
 }
 .hero-row {
-  --row-color: var(--track-1);
+  --row-color: var(--track);
   display: flex;
   align-items: center;
   gap: 0.6rem;
-}
-.hero-row[data-track="2"] {
-  --row-color: var(--track-2);
 }
 .hero-row-label {
   width: 1rem;
