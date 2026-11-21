@@ -1,107 +1,14 @@
 ---
-// src/components/ThankYou.astro
-import BaseLayout from '../layouts/BaseLayout.astro';
+import BaseLayout from "../layouts/BaseLayout.astro";
+import Logo from "../components/Logo.astro";
 import * as m from "../paraglide/messages.js";
 ---
 
-<BaseLayout title="Thank You">
-  <main class="thank-you-container">
-    <div class="thank-you-card">
-      <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="thank-you-icon">
-        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
-        <polyline points="22 4 12 14.01 9 11.01"></polyline>
-      </svg>
-
-      <h1 class="thank-you-title">{m.thank_you_title()}</h1>
-
-      <p class="thank-you-message">
-        {m.thank_you_message()}
-      </p>
-      
-      <div class="thank-you-actions">
-        <a href="/" class="thank-you-button">{m.thank_you_return_home()}</a>
-        <!-- <a href="/contact" class="thank-you-button secondary">Contact Us</a> -->
-      </div>
-    </div>
-  </main>
-
-  <style>
-    .thank-you-container {
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      min-height: 100vh;
-      padding: 1rem;
-      background-color: #f8fafc;
-    }
-    
-    .thank-you-card {
-      max-width: 500px;
-      width: 100%;
-      padding: 2.5rem;
-      text-align: center;
-      background: white;
-      border-radius: 12px;
-      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-    }
-    
-    .thank-you-icon {
-      color: #10b981;
-      margin-bottom: 1.5rem;
-    }
-    
-    .thank-you-title {
-      font-size: 1.75rem;
-      font-weight: 700;
-      color: #1e293b;
-      margin-bottom: 1rem;
-    }
-    
-    .thank-you-message {
-      color: #64748b;
-      line-height: 1.6;
-      margin-bottom: 2rem;
-    }
-    
-    .thank-you-actions {
-      display: flex;
-      gap: 1rem;
-      justify-content: center;
-    }
-    
-    .thank-you-button {
-      display: inline-block;
-      padding: 0.75rem 1.5rem;
-      border-radius: 6px;
-      font-weight: 500;
-      text-decoration: none;
-      transition: all 0.2s ease;
-    }
-    
-    .thank-you-button {
-      background-color: #10b981;
-      color: white;
-    }
-    
-    .thank-you-button.secondary {
-      background-color: white;
-      color: #10b981;
-      border: 1px solid #10b981;
-    }
-    
-    .thank-you-button:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-    }
-    
-    @media (max-width: 640px) {
-      .thank-you-actions {
-        flex-direction: column;
-      }
-      
-      .thank-you-card {
-        padding: 1.5rem;
-      }
-    }
-  </style>
+<BaseLayout title={m.thanks_title()}>
+  <section class="screen thanks">
+    <Logo size={64} />
+    <h1 class="display">{m.thanks_heading()}</h1>
+    <p>{m.thanks_text()}</p>
+    <p class="cta-row"><a class="btn" href="/">{m.thanks_home()}</a></p>
+  </section>
 </BaseLayout>

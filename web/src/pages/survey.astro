@@ -1,16 +1,9 @@
 ---
-import SurveyComponent from "../components/SurveyComponent.js";
 import BaseLayout from "../layouts/BaseLayout.astro";
+import Survey from "../components/Survey";
+import * as m from "../paraglide/messages.js";
 ---
 
-<BaseLayout title="Audio Survey">
-  <SurveyComponent client:load/>  
+<BaseLayout title={m.survey_title()}>
+  <Survey client:load />
 </BaseLayout>
-
-<style>
-  .survey-container {
-    max-width: 800px;
-    margin: 0 auto;
-    padding: 2rem;
-  }
-</style>

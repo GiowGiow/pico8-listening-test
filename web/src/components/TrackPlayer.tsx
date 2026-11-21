@@ -1,0 +1,187 @@
+import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
+import * as m from "../paraglide/messages.js";
+
+const STEPS = 32;
+export const HEARD_SECONDS = 15;
+const PLAY_EVENT = "p8percept:play";
+
+interface Props {
+  track: 1 | 2;
+  src: string;
+  onListened: (seconds: number) => void;
+}
+
+function clock(seconds: number) {
+  const s = Math.max(0, Math.floor(seconds));
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+}
+
+/**
+ * One clip, drawn as the 32 steps of a PICO-8 SFX. Only one track plays at a
+ * time: starting one pauses the other through a window event. Listening time
+ * is accumulated from actual playback, so seeking forward does not count.
+ */
+export default function TrackPlayer({ track, src, onListened }: Props) {
+  const audio = useRef<HTMLAudioElement>(null);
+  const strip = useRef<HTMLDivElement>(null);
+  const last = useRef<number | null>(null);
+  const listened = useRef(0);
+  const [playing, setPlaying] = useState(false);
+  const [time, setTime] = useState(0);
+  const [duration, setDuration] = useState(20);
+  const [heard, setHeard] = useState(false);
+
+  useEffect(() => {
+    listened.current = 0;
+    last.current = null;
+    setHeard(false);
+    setTime(0);
+    setPlaying(false);
+  }, [src]);
+
+  useEffect(() => {
+    const other = (e: Event) => {
+      if ((e as CustomEvent<number>).detail !== track) audio.current?.pause();
+    };
+    window.addEventListener(PLAY_EVENT, other);
+    return () => window.removeEventListener(PLAY_EVENT, other);
+  }, [track]);
+
+  function onTimeUpdate() {
+    const el = audio.current;
+    if (!el) return;
+    const now = el.currentTime;
+    if (last.current !== null && !el.paused) {
+      const delta = now - last.current;
+      if (delta > 0 && delta < 1) listened.current += delta;
+    }
+    last.current = now;
+    setTime(now);
+    onListened(listened.current);
+    if (listened.current >= HEARD_SECONDS) setHeard(true);
+  }
+
+  function toggle() {
+    const el = audio.current;
+    if (!el) return;
+    if (el.paused) {
+      window.dispatchEvent(new CustomEvent(PLAY_EVENT, { detail: track }));
+      void el.play();
+    } else {
+      el.pause();
+    }
+  }
+
+  function seekTo(fraction: number) {
+    const el = audio.current;
+    if (!el || !Number.isFinite(el.duration)) return;
+    el.currentTime = Math.min(Math.max(fraction, 0), 0.999) * el.duration;
+    last.current = el.currentTime;
+    setTime(el.currentTime);
+  }
+
+  function onPointer(e: PointerEvent<HTMLDivElement>) {
+    if (e.type === "pointermove" && e.buttons !== 1) return;
+    const cells = strip.current?.children;
+    if (!cells?.length) return;
+    // works for both the one-row (desktop) and two-row (phone) layouts
+    let index = 0;
+    for (let i = 0; i < cells.length; i++) {
+      const r = cells[i].getBoundingClientRect();
+      if (e.clientX >= r.left - 1 && e.clientX <= r.right + 1 && e.clientY >= r.top - 2 && e.clientY <= r.bottom + 2) {
+        index = i;
+        break;
+      }
+    }
+    seekTo(index / STEPS);
+  }
+
+  function onKey(e: KeyboardEvent<HTMLDivElement>) {
+    const el = audio.current;
+    if (!el) return;
+    const step = el.duration / STEPS;
+    if (e.key === "ArrowRight" || e.key === "ArrowUp") seekTo((el.currentTime + step) / el.duration);
+    else if (e.key === "ArrowLeft" || e.key === "ArrowDown") seekTo((el.currentTime - step) / el.duration);
+    else if (e.key === "Home") seekTo(0);
+    else if (e.key === "End") seekTo(0.999);
+    else if (e.key === " " || e.key === "Enter") toggle();
+    else return;
+    e.preventDefault();
+  }
+
+  const progress = duration > 0 ? time / duration : 0;
+  const head = Math.min(STEPS - 1, Math.floor(progress * STEPS));
+  const label = playing ? m.survey_pause({ n: track }) : m.survey_play({ n: track });
+
+  return (
+    <section className="screen track" data-track={track} aria-label={m.survey_track({ n: track })}>
+      <div className="track-head">
+        <span className="track-name">{m.survey_track({ n: track })}</span>
+        <span className="track-heard" data-heard={heard ? "true" : "false"}>
+          {heard ? `✓ ${m.survey_heard()}` : m.survey_listen_left({ s: Math.ceil(HEARD_SECONDS - Math.min(listened.current, HEARD_SECONDS)) })}
+        </span>
+      </div>
+      <div className="track-body">
+        <button type="button" className="play" onClick={toggle} aria-label={label} title={label}>
+          {playing ? (
+            <svg viewBox="0 0 8 8" aria-hidden="true">
+              <rect x="1" y="1" width="2" height="6" fill="currentColor" />
+              <rect x="5" y="1" width="2" height="6" fill="currentColor" />
+            </svg>
+          ) : (
+            <svg viewBox="0 0 8 8" aria-hidden="true">
+              <rect x="2" y="1" width="1" height="6" fill="currentColor" />
+              <rect x="3" y="2" width="1" height="4" fill="currentColor" />
+              <rect x="4" y="2" width="1" height="4" fill="currentColor" />
+              <rect x="5" y="3" width="1" height="2" fill="currentColor" />
+              <rect x="6" y="3" width="1" height="2" fill="currentColor" />
+            </svg>
+          )}
+        </button>
+        <div
+          ref={strip}
+          className="steps"
+          role="slider"
+          tabIndex={0}
+          aria-label={m.survey_seek_label({ n: track })}
+          aria-valuemin={0}
+          aria-valuemax={Math.round(duration)}
+          aria-valuenow={Math.round(time)}
+          aria-valuetext={`${clock(time)} / ${clock(duration)}`}
+          onPointerDown={onPointer}
+          onPointerMove={onPointer}
+          onKeyDown={onKey}
+        >
+          {Array.from({ length: STEPS }, (_, i) => (
+            <span
+              key={i}
+              className="step"
+              data-beat={i % 4 === 0 ? "true" : "false"}
+              data-on={i < head || (i === head && time > 0) ? "true" : "false"}
+              data-head={playing && i === head ? "true" : "false"}
+            />
+          ))}
+        </div>
+        <span className="track-time mono">
+          {clock(time)} / {clock(Math.round(duration))}
+        </span>
+      </div>
+      <audio
+        ref={audio}
+        src={src}
+        preload="auto"
+        onPlay={() => {
+          last.current = audio.current?.currentTime ?? 0;
+          setPlaying(true);
+        }}
+        onPause={() => setPlaying(false)}
+        onEnded={() => {
+          setPlaying(false);
+          last.current = null;
+        }}
+        onTimeUpdate={onTimeUpdate}
+        onLoadedMetadata={() => setDuration(audio.current?.duration || 20)}
+      />
+    </section>
+  );
+}

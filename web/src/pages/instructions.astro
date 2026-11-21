@@ -1,57 +1,31 @@
 ---
-import BaseLayout from '../layouts/BaseLayout.astro';
-import { studyConfig } from '../config/studyConfig.js';
+import BaseLayout from "../layouts/BaseLayout.astro";
 import * as m from "../paraglide/messages.js";
-// Welcome to Astro! Wondering what to do next? Check out the Astro documentation at https://docs.astro.build
-// Don't want to use any of this? Delete everything in this file, the `assets`, `components`, and `layouts` directories, and start fresh.
+
+const steps = [
+  [m.how_step_listen_title(), m.how_step_listen_text()],
+  [m.how_step_answer_title(), m.how_step_answer_text()],
+  [m.how_step_profile_title(), m.how_step_profile_text()],
+];
 ---
-<BaseLayout title="Instructions">
-    <section class="max-w-4xl mx-auto py-12">
-        <div class="text-center mb-12">
-            <h1 class="text-4xl font-bold mb-6 bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">{m.instructions_title()}</h1>
+
+<BaseLayout title={m.how_title()}>
+  <p class="eyebrow">{m.how_title()}</p>
+  <h1 class="display page-title">{m.how_heading()}</h1>
+  <ol class="how-steps">
+    {steps.map(([title, text], i) => (
+      <li class="screen how-step">
+        <span class="how-num display" aria-hidden="true">{i + 1}</span>
+        <div>
+          <h2>{title}</h2>
+          <p>{text}</p>
         </div>
-
-        <div class="bg-white rounded-lg shadow-lg p-8 mb-8">
-            <div class="mb-8">
-                <h2 class="text-2xl font-semibold mb-6 text-gray-800 border-b border-gray-200 pb-3">
-                    {m.instructions_overview()}
-                </h2>
-                <div class="space-y-6 text-lg text-gray-700 leading-relaxed">
-                    <p>
-                        {m.instructions_pairs_info({ numberOfPairs: studyConfig.numberOfPairs })}
-                    </p>
-                    <p>
-                        {m.instructions_task_description()}
-                    </p>
-                    <p>
-                        {m.instructions_demographic_info()}
-                    </p>
-                </div>
-            </div>
-
-            <div class="bg-yellow-50 border-l-4 border-yellow-400 p-6 mb-8">
-                <div class="flex items-center">
-                    <div class="flex-shrink-0">
-                        <svg class="h-6 w-6 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
-                            <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
-                        </svg>
-                    </div>
-                    <div class="ml-3">
-                        <h3 class="text-lg font-medium text-yellow-800">{m.instructions_headphones_title()}</h3>
-                        <p class="text-yellow-700 mt-1">
-                            {m.instructions_headphones_text()}
-                        </p>
-                    </div>
-                </div>
-            </div>
-
-        <div class="text-center">
-
-            <p class="text-gray-600 mb-6">{m.instructions_ready()}</p>
-            <a href="/survey" class="inline-block bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white px-8 py-4 rounded-lg text-lg font-medium transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-1">
-                {m.instructions_start_survey()}
-            </a>
-        </div>
-        </div>
-    </section>
+      </li>
+    ))}
+  </ol>
+  <aside class="note">
+    <h2>{m.how_note_title()}</h2>
+    <p>{m.how_note_text()}</p>
+  </aside>
+  <p class="cta-row"><a class="btn" href="/survey">{m.how_start()}</a></p>
 </BaseLayout>

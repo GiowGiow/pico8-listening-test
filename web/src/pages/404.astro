@@ -1,0 +1,12 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+import * as m from "../paraglide/messages.js";
+---
+
+<BaseLayout title={m.not_found_title()}>
+  <section class="screen">
+    <h1 class="display">{m.not_found_title()}</h1>
+    <p>{m.not_found_text()}</p>
+    <p class="cta-row"><a class="btn" href="/">{m.thanks_home()}</a></p>
+  </section>
+</BaseLayout>

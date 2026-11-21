@@ -1,0 +1,17 @@
+---
+// Two beamed notes: the left head in the track-1 blue, the right in the
+// track-2 pink. Drawn on a 16x16 pixel grid.
+interface Props { size?: number; title?: string }
+const { size = 32, title } = Astro.props;
+---
+<svg width={size} height={size} viewBox="0 0 16 16" shape-rendering="crispEdges" role={title ? "img" : undefined} aria-hidden={title ? undefined : "true"} aria-label={title}>
+  <rect x="5" y="2" width="10" height="2" fill="#ffec27" />
+  <rect x="5" y="4" width="1" height="8" fill="#fff1e8" />
+  <rect x="14" y="4" width="1" height="6" fill="#fff1e8" />
+  <rect x="3" y="11" width="3" height="1" fill="#29adff" />
+  <rect x="2" y="12" width="4" height="1" fill="#29adff" />
+  <rect x="2" y="13" width="3" height="1" fill="#29adff" />
+  <rect x="12" y="9" width="3" height="1" fill="#ff77a8" />
+  <rect x="11" y="10" width="4" height="1" fill="#ff77a8" />
+  <rect x="11" y="11" width="3" height="1" fill="#ff77a8" />
+</svg>
