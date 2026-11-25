@@ -10,10 +10,12 @@ from the catalog. The participant id is the HMAC, never the e-mail.
 import csv
 import sys
 
+from flask import current_app
+
 from .models import Participant, Response
 
 COLUMNS = [
-    "participant_id", "position", "question", "pair_id", "pair_role", "tag", "game_tid",
+    "participant_id", "position", "question", "pair_id", "pair_role", "tag", "game_tid", "clap_similarity",
     "track_a_id", "track_a_system", "track_a_kind", "track_a_source",
     "track_b_id", "track_b_system", "track_b_kind", "track_b_source",
     "choice", "chose_human", "familiarity", "comments",
@@ -25,6 +27,7 @@ COLUMNS = [
 
 def write_csv(out):
     """Write every answered pair to the file-like object `out`."""
+    similarity = {p["id"]: p.get("clap_similarity", "") for p in current_app.config["CATALOG"]["pairs"]}
     writer = csv.writer(out)
     writer.writerow(COLUMNS)
     rows = (Response.query.join(Participant).filter(Response.answered_at.isnot(None))
@@ -33,6 +36,7 @@ def write_csv(out):
         p = r.participant
         writer.writerow([
             p.id, r.position, r.question, r.pair_id, r.pair.role, r.pair.tag, r.pair.game_tid,
+            similarity.get(r.pair_id, ""),
             r.track_a.id, r.track_a.system, r.track_a.kind, r.track_a.source_id,
             r.track_b.id, r.track_b.system, r.track_b.kind, r.track_b.source_id,
             r.choice, int(r.chose_human), r.familiarity, r.comments or "",
