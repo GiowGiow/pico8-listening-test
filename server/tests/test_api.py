@@ -140,6 +140,17 @@ def test_questionnaire_only_takes_listed_options(client, field, value):
     assert client.put("/api/participants/me", json=missing, headers=headers).status_code == 400
 
 
+def test_under_18_is_refused_and_nothing_is_stored(client, app):
+    headers = register(client)
+    reply = client.put("/api/participants/me", json={**PROFILE, "age_range": "under_18"}, headers=headers)
+    assert reply.status_code == 403 and reply.get_json() == {"error": "ineligible"}
+    assert client.get("/api/session", headers=headers).get_json() == {"status": "pending_profile", "scenarios": []}
+    with app.app_context():
+        p = db.session.get(Participant, headers["X-Participant-Id"])
+        assert p.profile_completed_at is None and all(getattr(p, name) is None for name in PROFILE)
+        assert Reservation.query.count() == 0
+
+
 def test_questionnaire_is_stored_once(client, app):
     headers = register(client)
     assert client.put("/api/participants/me", json=PROFILE, headers=headers).get_json()["status"] == "in_progress"

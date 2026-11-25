@@ -139,6 +139,8 @@ def update_profile():
     for name, codes in questionnaire.CODES.items():
         if data.get(name) not in codes:
             raise BadRequest(name)
+    if any(data[name] in codes for name, codes in questionnaire.INELIGIBLE.items()):
+        return error(403, "ineligible")
     for name in questionnaire.CODES:
         setattr(participant, name, data[name])
     participant.questionnaire_version = questionnaire.VERSION

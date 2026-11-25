@@ -73,6 +73,10 @@ FIELDS = [
     },
 ]
 
+# Answers that end the participation: the study only takes adults. Such an answer
+# is refused and nothing of the questionnaire is stored.
+INELIGIBLE = {"age_range": {"under_18"}}
+
 CODES = {field["name"]: {code for code, _ in field["options"]} for field in FIELDS}
 LABELS = {field["name"]: dict(field["options"]) for field in FIELDS}
 
