@@ -225,7 +225,11 @@ def main():
             if extra:
                 spare = (tag, chosen.pop())
             sample_file = f"samples/TAG_{tag}"
-            pool = long_enough(read_jsonl(args.cond_run / "samples" / f"TAG_{tag}" / "samples.jsonl.gz"))
+            folder = args.cond_run / "samples" / f"TAG_{tag}"
+            samples = folder / "samples.jsonl.gz"
+            everything = read_jsonl(samples if samples.exists() else folder / "samples.jsonl")
+            pool = long_enough(everything)
+            print(f"{tag}: {len(pool)} of {len(everything)} generated songs >= {args.clip_seconds:g} s", flush=True)
             rng.shuffle(pool)
             generated = []
             for item in renderer.usable(pool):
