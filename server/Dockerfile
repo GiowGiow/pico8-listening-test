@@ -27,6 +27,6 @@ VOLUME /data
 # One worker on purpose: SQLite, the in-memory rate limiter and the lock that
 # serializes the scenario queue all assume a single process. Threads cover the
 # concurrency a listening test needs.
-CMD ["gunicorn", "app.wsgi:app", "--bind", "0.0.0.0:8000", "--workers", "1", "--threads", "8", \
+CMD ["gunicorn", "app.wsgi:app", "--bind", "0.0.0.0:8000", "--workers", "1", "--threads", "32", \
      "--worker-tmp-dir", "/tmp", "--no-control-socket", "--timeout", "30", "--graceful-timeout", "10", \
      "--limit-request-line", "2048", "--limit-request-fields", "50", "--error-logfile", "-"]

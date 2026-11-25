@@ -108,7 +108,8 @@ def study():
 
 
 @api.post("/participants")
-@limiter.limit("5/minute;30/hour")
+# Generous on purpose: a class on the same campus network shares one address.
+@limiter.limit("30/minute;300/hour")
 def register():
     data = body()
     email = data.get("email")
