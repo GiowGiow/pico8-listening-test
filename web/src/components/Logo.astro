@@ -1,16 +1,18 @@
 ---
-// Two beamed notes on a 16x16 pixel grid, both heads the same color.
+// A pixel cartridge with a stripe in PICO-8 palette colors. Drawn for this
+// study; it is not the PICO-8 logo itself.
 interface Props { size?: number; title?: string }
 const { size = 32, title } = Astro.props;
+const stripe = ["#ff004d", "#ffa300", "#ffec27", "#00e436", "#29adff", "#83769c", "#ff77a8"];
 ---
 <svg width={size} height={size} viewBox="0 0 16 16" shape-rendering="crispEdges" role={title ? "img" : undefined} aria-hidden={title ? undefined : "true"} aria-label={title}>
-  <rect x="5" y="2" width="10" height="2" fill="#ffec27" />
-  <rect x="5" y="4" width="1" height="8" fill="#fff1e8" />
-  <rect x="14" y="4" width="1" height="6" fill="#fff1e8" />
-  <rect x="3" y="11" width="3" height="1" fill="#fff1e8" />
-  <rect x="2" y="12" width="4" height="1" fill="#fff1e8" />
-  <rect x="2" y="13" width="3" height="1" fill="#fff1e8" />
-  <rect x="12" y="9" width="3" height="1" fill="#fff1e8" />
-  <rect x="11" y="10" width="4" height="1" fill="#fff1e8" />
-  <rect x="11" y="11" width="3" height="1" fill="#fff1e8" />
+  <path d="M2 1h10l2 2v12H2z" fill="#1d2b53" />
+  <rect x="4" y="3" width="8" height="6" fill="#fff1e8" />
+  {stripe.map((color, i) => <rect x={4 + i} y={10} width="1" height="2" fill={color} />)}
+  <rect x="11" y="10" width="1" height="2" fill="#fff1e8" />
+  <rect x="6" y="4" width="4" height="1" fill="#1d2b53" />
+  <rect x="6" y="5" width="1" height="3" fill="#1d2b53" />
+  <rect x="9" y="5" width="1" height="2" fill="#1d2b53" />
+  <rect x="5" y="7" width="2" height="1" fill="#1d2b53" />
+  <rect x="8" y="6" width="2" height="1" fill="#1d2b53" />
 </svg>

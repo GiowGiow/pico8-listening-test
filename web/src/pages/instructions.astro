@@ -11,11 +11,11 @@ const steps = [
 
 <BaseLayout title={m.how_title()}>
   <p class="eyebrow">{m.how_title()}</p>
-  <h1 class="display page-title">{m.how_heading()}</h1>
+  <h1 class="page-title">{m.how_heading()}</h1>
   <ol class="how-steps">
     {steps.map(([title, text], i) => (
       <li class="screen how-step">
-        <span class="how-num display" aria-hidden="true">{i + 1}</span>
+        <span class="how-num" aria-hidden="true">{i + 1}</span>
         <div>
           <h2>{title}</h2>
           <p>{text}</p>
@@ -23,8 +23,8 @@ const steps = [
       </li>
     ))}
   </ol>
-  <aside class="note">
-    <h2>{m.how_note_title()}</h2>
+  <aside class="callout">
+    <h3>{m.how_note_title()}</h3>
     <p>{m.how_note_text()}</p>
   </aside>
   <p class="cta-row"><a class="btn" href="/survey">{m.how_start()}</a></p>

@@ -57,12 +57,17 @@ export async function api<T>(path: string, options: { method?: string; json?: un
 
 export type Status = "new" | "in_progress" | "pending_profile" | "completed";
 
+export type Question = "fit" | "ai" | "preference";
+
 export interface Pair {
   response_id: string;
   position: number;
+  question: Question;
+  tag: string;
+  image: string;
   track_a: string;
   track_b: string;
   answered: boolean;
 }
 
-export const PAIRS_PER_PARTICIPANT = 10;
+export const PAIRS_PER_PARTICIPANT = 9;

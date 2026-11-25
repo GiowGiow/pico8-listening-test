@@ -6,12 +6,22 @@ import TrackPlayer, { HEARD_SECONDS } from "./TrackPlayer";
 type Load = "loading" | "ready" | "no_participant" | "error";
 
 interface Answer {
-  human_perception: number | null;
-  song_recognition: number | null;
+  choice: number | null;
+  familiarity: number | null;
   comments: string;
 }
 
-const EMPTY: Answer = { human_perception: null, song_recognition: null, comments: "" };
+const EMPTY: Answer = { choice: null, familiarity: null, comments: "" };
+
+const QUESTIONS = { fit: m.survey_q_fit, ai: m.survey_q_ai, preference: m.survey_q_preference };
+const TAGS: Record<string, () => string> = {
+  platformer: m.tag_platformer,
+  puzzle: m.tag_puzzle,
+  arcade: m.tag_arcade,
+  shmup: m.tag_shmup,
+  shooter: m.tag_shooter,
+  action: m.tag_action,
+};
 
 export default function Survey() {
   const [load, setLoad] = useState<Load>("loading");
@@ -71,7 +81,7 @@ export default function Survey() {
   const pair = pairs[index];
   const isLast = index === pairs.length - 1;
   const heardBoth = listened[0] >= HEARD_SECONDS && listened[1] >= HEARD_SECONDS;
-  const complete = answer.human_perception !== null && answer.song_recognition !== null;
+  const complete = answer.choice !== null && answer.familiarity !== null;
 
   async function next() {
     if (!complete || !heardBoth || saving) return;
@@ -81,8 +91,8 @@ export default function Survey() {
       await api(`/responses/${pair.response_id}`, {
         method: "POST",
         json: {
-          human_perception: answer.human_perception,
-          song_recognition: answer.song_recognition,
+          choice: answer.choice,
+          familiarity: answer.familiarity,
           comments: answer.comments.slice(0, 2000),
           time_spent_ms: Date.now() - started.current,
           listened_a_s: Math.round(listened[0] * 10) / 10,
@@ -110,24 +120,23 @@ export default function Survey() {
     heading.current?.focus();
   }
 
-  const aiOptions: [number, string][] = [
-    [1, m.survey_q_ai_track1()],
-    [2, m.survey_q_ai_track2()],
-    [3, m.survey_q_ai_both()],
-    [0, m.survey_q_ai_none()],
-    [4, m.survey_q_ai_unsure()],
+  const choiceOptions: [number, string][] = [
+    [1, m.survey_track({ n: 1 })],
+    [2, m.survey_track({ n: 2 })],
   ];
   const knownOptions: [number, string][] = [
     [0, m.survey_q_known_none()],
-    [1, m.survey_q_known_track1()],
-    [2, m.survey_q_known_track2()],
+    [1, m.survey_q_known_game()],
+    [2, m.survey_q_known_song()],
     [3, m.survey_q_known_both()],
   ];
+  const question = (QUESTIONS[pair.question] ?? m.survey_q_fit)();
+  const tag = TAGS[pair.tag]?.() ?? pair.tag;
 
   return (
     <div className="survey">
       <div className="survey-head">
-        <h1 ref={heading} tabIndex={-1} className="display survey-title">
+        <h1 ref={heading} tabIndex={-1} className="survey-title">
           {m.survey_pair_of({ current: index + 1, total: pairs.length })}
         </h1>
         <div className="pair-progress" aria-hidden="true">
@@ -137,31 +146,42 @@ export default function Survey() {
         </div>
       </div>
 
-      <TrackPlayer
-        key={pair.track_a}
-        track={1}
-        src={pair.track_a}
-        onListened={(s) => setListened((l) => (s > l[0] ? [s, l[1]] : l))}
-      />
-      <TrackPlayer
-        key={pair.track_b}
-        track={2}
-        src={pair.track_b}
-        onListened={(s) => setListened((l) => (s > l[1] ? [l[0], s] : l))}
-      />
+      <section className="screen game" aria-label={m.survey_game_label()}>
+        <img className="game-image" src={pair.image} alt={m.survey_game_alt()} width={480} height={615} />
+        <div>
+          <span className="game-tag">{m.survey_game_tag({ tag })}</span>
+          <p className="game-question">{question}</p>
+          <p className="game-hint">{m.survey_game_hint()}</p>
+        </div>
+      </section>
+
+      <div className="tracks">
+        <TrackPlayer
+          key={pair.track_a}
+          track={1}
+          src={pair.track_a}
+          onListened={(s) => setListened((l) => (s > l[0] ? [s, l[1]] : l))}
+        />
+        <TrackPlayer
+          key={pair.track_b}
+          track={2}
+          src={pair.track_b}
+          onListened={(s) => setListened((l) => (s > l[1] ? [l[0], s] : l))}
+        />
+      </div>
 
       <form className="screen survey-form" onSubmit={(e) => (e.preventDefault(), void next())}>
         <fieldset className="question">
-          <legend>{m.survey_q_ai()}</legend>
-          <div className="options">
-            {aiOptions.map(([value, label]) => (
+          <legend>{question}</legend>
+          <div className="options two">
+            {choiceOptions.map(([value, label]) => (
               <label key={value} className="option">
                 <input
                   type="radio"
-                  name="human_perception"
+                  name="choice"
                   value={value}
-                  checked={answer.human_perception === value}
-                  onChange={() => setAnswer({ ...answer, human_perception: value })}
+                  checked={answer.choice === value}
+                  onChange={() => setAnswer({ ...answer, choice: value })}
                 />
                 <span>{label}</span>
               </label>
@@ -169,24 +189,23 @@ export default function Survey() {
           </div>
         </fieldset>
 
-        <fieldset className="question">
+        <fieldset className="question question-gap">
           <legend>{m.survey_q_known()}</legend>
           <div className="options">
             {knownOptions.map(([value, label]) => (
               <label key={value} className="option">
                 <input
                   type="radio"
-                  name="song_recognition"
+                  name="familiarity"
                   value={value}
-                  checked={answer.song_recognition === value}
-                  onChange={() => setAnswer({ ...answer, song_recognition: value })}
+                  checked={answer.familiarity === value}
+                  onChange={() => setAnswer({ ...answer, familiarity: value })}
                 />
                 <span>{label}</span>
               </label>
             ))}
           </div>
         </fieldset>
-
         <div className="question-gap">
           <label htmlFor="comments" className="field-label">
             {m.survey_q_comments()}

@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
 import * as m from "../paraglide/messages.js";
 
-const STEPS = 32;
 export const HEARD_SECONDS = 15;
 const PLAY_EVENT = "p8percept:play";
 
@@ -17,7 +16,7 @@ function clock(seconds: number) {
 }
 
 /**
- * One clip, drawn as the 32 steps of a PICO-8 SFX. Only one track plays at a
+ * One clip with a play button and a seek bar. Only one track plays at a
  * time: starting one pauses the other through a window event. Listening time
  * is accumulated from actual playback, so seeking forward does not count.
  */
@@ -82,24 +81,15 @@ export default function TrackPlayer({ track, src, onListened }: Props) {
 
   function onPointer(e: PointerEvent<HTMLDivElement>) {
     if (e.type === "pointermove" && e.buttons !== 1) return;
-    const cells = strip.current?.children;
-    if (!cells?.length) return;
-    // works for both the one-row (desktop) and two-row (phone) layouts
-    let index = 0;
-    for (let i = 0; i < cells.length; i++) {
-      const r = cells[i].getBoundingClientRect();
-      if (e.clientX >= r.left - 1 && e.clientX <= r.right + 1 && e.clientY >= r.top - 2 && e.clientY <= r.bottom + 2) {
-        index = i;
-        break;
-      }
-    }
-    seekTo(index / STEPS);
+    const r = strip.current?.getBoundingClientRect();
+    if (!r || r.width === 0) return;
+    seekTo((e.clientX - r.left) / r.width);
   }
 
   function onKey(e: KeyboardEvent<HTMLDivElement>) {
     const el = audio.current;
     if (!el) return;
-    const step = el.duration / STEPS;
+    const step = el.duration / 20;
     if (e.key === "ArrowRight" || e.key === "ArrowUp") seekTo((el.currentTime + step) / el.duration);
     else if (e.key === "ArrowLeft" || e.key === "ArrowDown") seekTo((el.currentTime - step) / el.duration);
     else if (e.key === "Home") seekTo(0);
@@ -110,7 +100,6 @@ export default function TrackPlayer({ track, src, onListened }: Props) {
   }
 
   const progress = duration > 0 ? time / duration : 0;
-  const head = Math.min(STEPS - 1, Math.floor(progress * STEPS));
   const label = playing ? m.survey_pause({ n: track }) : m.survey_play({ n: track });
 
   return (
@@ -124,23 +113,19 @@ export default function TrackPlayer({ track, src, onListened }: Props) {
       <div className="track-body">
         <button type="button" className="play" onClick={toggle} aria-label={label} title={label}>
           {playing ? (
-            <svg viewBox="0 0 8 8" aria-hidden="true">
-              <rect x="1" y="1" width="2" height="6" fill="currentColor" />
-              <rect x="5" y="1" width="2" height="6" fill="currentColor" />
+            <svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor">
+              <rect x="6" y="5" width="4" height="14" rx="1" />
+              <rect x="14" y="5" width="4" height="14" rx="1" />
             </svg>
           ) : (
-            <svg viewBox="0 0 8 8" aria-hidden="true">
-              <rect x="2" y="1" width="1" height="6" fill="currentColor" />
-              <rect x="3" y="2" width="1" height="4" fill="currentColor" />
-              <rect x="4" y="2" width="1" height="4" fill="currentColor" />
-              <rect x="5" y="3" width="1" height="2" fill="currentColor" />
-              <rect x="6" y="3" width="1" height="2" fill="currentColor" />
+            <svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor">
+              <path d="M8 5.5v13a1 1 0 001.5.86l10.5-6.5a1 1 0 000-1.72L9.5 4.64A1 1 0 008 5.5z" />
             </svg>
           )}
         </button>
         <div
           ref={strip}
-          className="steps"
+          className="seek"
           role="slider"
           tabIndex={0}
           aria-label={m.survey_seek_label({ n: track })}
@@ -152,17 +137,11 @@ export default function TrackPlayer({ track, src, onListened }: Props) {
           onPointerMove={onPointer}
           onKeyDown={onKey}
         >
-          {Array.from({ length: STEPS }, (_, i) => (
-            <span
-              key={i}
-              className="step"
-              data-beat={i % 4 === 0 ? "true" : "false"}
-              data-on={i < head || (i === head && time > 0) ? "true" : "false"}
-              data-head={playing && i === head ? "true" : "false"}
-            />
-          ))}
+          <div className="seek-rail">
+            <div className="seek-fill" style={{ width: `${Math.min(100, progress * 100)}%` }} />
+          </div>
         </div>
-        <span className="track-time mono">
+        <span className="track-time">
           {clock(time)} / {clock(Math.round(duration))}
         </span>
       </div>
