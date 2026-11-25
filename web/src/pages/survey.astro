@@ -1,0 +1,16 @@
+---
+import SurveyComponent from "../components/SurveyComponent.js";
+import BaseLayout from "../layouts/BaseLayout.astro";
+---
+
+<BaseLayout title="Audio Survey">
+  <SurveyComponent client:load/>  
+</BaseLayout>
+
+<style>
+  .survey-container {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 2rem;
+  }
+</style>
