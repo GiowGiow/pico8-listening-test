@@ -82,5 +82,8 @@
 	"survey_lost": "You went a long while without answering and this scenario was passed on to someone else. We loaded a new one for you.",
 	"survey_full_title": "The collection is over",
 	"survey_full_text": "Every scenario of the study has already been rated. Thank you for your interest!",
-	"profile_error_load": "Could not load the questions. Check your connection and reload the page."
+	"profile_error_load": "Could not load the questions. Check your connection and reload the page.",
+	"home_age_note": "You must be 18 or older to take part.",
+	"profile_ineligible_title": "Thank you for your interest!",
+	"profile_ineligible_text": "This study is restricted to people aged 18 or older, so we cannot go on with your participation. None of your answers was stored."
 }

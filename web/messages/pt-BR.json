@@ -82,5 +82,8 @@
 	"survey_lost": "Você ficou um bom tempo sem responder e este cenário foi passado para outra pessoa. Carregamos um novo para você.",
 	"survey_full_title": "A coleta terminou",
 	"survey_full_text": "Todos os cenários do estudo já foram avaliados. Obrigado pelo interesse!",
-	"profile_error_load": "Não foi possível carregar as perguntas. Verifique sua conexão e recarregue a página."
+	"profile_error_load": "Não foi possível carregar as perguntas. Verifique sua conexão e recarregue a página.",
+	"home_age_note": "Para participar é preciso ter 18 anos ou mais.",
+	"profile_ineligible_title": "Obrigado pelo interesse!",
+	"profile_ineligible_text": "Este estudo é restrito a pessoas com 18 anos ou mais, então não podemos seguir com a sua participação. Nenhuma resposta sua foi guardada."
 }

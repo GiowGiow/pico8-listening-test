@@ -3,7 +3,7 @@ import { ApiError, api, getParticipant, type Status, type Study } from "../lib/a
 import { getLocale } from "../paraglide/runtime.js";
 import * as m from "../paraglide/messages.js";
 
-type View = "loading" | "form" | "no_participant" | "error";
+type View = "loading" | "form" | "no_participant" | "ineligible" | "error";
 
 /** The opening questionnaire: every question is answered by picking an option. */
 export default function ProfileForm() {
@@ -44,6 +44,11 @@ export default function ProfileForm() {
     try {
       await api("/participants/me", { method: "PUT", json: { ...answers, locale: getLocale() } });
     } catch (err) {
+      // 403: the study only takes adults; the server stored nothing
+      if (err instanceof ApiError && err.status === 403) {
+        setView("ineligible");
+        return;
+      }
       // 409: already stored (a retry after a lost reply), so move on
       if (!(err instanceof ApiError && err.status === 409)) {
         setError(err instanceof ApiError && err.status === 400 ? m.profile_error_fields() : m.profile_error_send());
@@ -60,6 +65,13 @@ export default function ProfileForm() {
       <p className="alert" role="alert">
         {m.profile_error_load()}
       </p>
+    );
+  if (view === "ineligible")
+    return (
+      <div className="screen" role="status">
+        <h2>{m.profile_ineligible_title()}</h2>
+        <p>{m.profile_ineligible_text()}</p>
+      </div>
     );
   if (view === "no_participant")
     return (
