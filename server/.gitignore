@@ -3,7 +3,10 @@ __pycache__/
 .venv/
 data/
 .pytest_cache/
-# Rendered audio is produced by tools/prepare_songs.py and baked into the image.
+# The catalog is built by tools/prepare_pairs.py and baked into the image.
+# catalog.json is the answer key (which clip of each pair is the original), so
+# it stays out of the repository while the study is running.
+catalog/catalog.json
 catalog/audio/
 catalog/images/
 .cache/
