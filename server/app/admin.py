@@ -1,30 +1,24 @@
 """Researcher panel, mounted at /admin.
 
-It shows the answer key (which clip of each pair is the original), so it only
-answers on the host names listed in ADMIN_HOSTS. The public host is not in
-that list and its ingress does not route /admin to this server at all.
+It shows how the collection is going and lets the team audit the package. It
+does not know which clip of a scenario is which: that key stays with the
+research team. It only answers on the host names listed in ADMIN_HOSTS.
 """
 
+import functools
 import io
-import math
 import statistics
-from collections import Counter, defaultdict
+import wave
+from collections import Counter
 
 from flask import Blueprint, Response as HttpResponse, abort, current_app, render_template, request
 
+from . import questionnaire
 from .export import write_csv
-from .models import Pair, Participant, Response
+from .models import Participant, Reservation, Scenario, utcnow
+from .scenarios import SLOTS
 
 admin = Blueprint("admin", __name__, url_prefix="/admin")
-
-QUESTION_LABELS = {
-    "fit": "Qual música combina mais com o jogo?",
-    "ai": "Qual música foi gerada por IA?",
-    "preference": "Qual música você prefere?",
-}
-LEVELS = ["Nenhuma", "Menos de 1 ano", "1 a 5 anos", "Mais de 5 anos"]
-CHIPTUNE = ["Nunca ouvi", "Já ouvi", "Ouço às vezes", "Ouço muito ou componho"]
-FAMILIARITY = ["Não conhecia", "Conhecia o jogo", "Conhecia uma das músicas", "Conhecia o jogo e a música"]
 
 
 @admin.before_request
@@ -50,144 +44,122 @@ def headers(response):
     return response
 
 
-def binomial_p(k, n):
-    """Two-sided exact binomial test against 0.5."""
-    if n == 0:
-        return None
-    tail = sum(math.comb(n, i) for i in range(0, min(k, n - k) + 1)) / 2 ** n
-    return min(1.0, 2 * tail)
+@functools.lru_cache(maxsize=1)
+def audit_files(study_dir, ids):
+    """Read every file of the package once: which are missing, and the WAV formats found."""
+    missing, formats = [], Counter()
+    for eid in ids:
+        folder = study_dir / "scenarios" / eid
+        if not (folder / "context.png").is_file():
+            missing.append(f"{eid}/context.png")
+        for slot in SLOTS:
+            try:
+                with wave.open(str(folder / f"{slot}.wav"), "rb") as w:
+                    formats[(w.getnchannels(), w.getsampwidth() * 8, w.getframerate(),
+                             round(w.getnframes() / w.getframerate(), 2))] += 1
+            except (OSError, wave.Error, EOFError):
+                missing.append(f"{eid}/{slot}.wav")
+    return missing, dict(formats)
 
 
-def wilson(k, n, z=1.96):
-    if n == 0:
-        return None
-    p = k / n
-    centre = (p + z * z / (2 * n)) / (1 + z * z / n)
-    half = z * math.sqrt(p * (1 - p) / n + z * z / (4 * n * n)) / (1 + z * z / n)
-    return max(0.0, centre - half), min(1.0, centre + half)
-
-
-def summary(responses):
-    """Share of answers that picked the original clip."""
-    n = len(responses)
-    k = sum(1 for r in responses if r.chose_human)
-    return {"n": n, "k": k, "share": k / n if n else None, "ci": wilson(k, n), "p": binomial_p(k, n)}
-
-
-def catalog_checks(catalog, pairs):
-    songs = {s["id"]: s for s in catalog["songs"]}
-    audio_dir, image_dir = current_app.config["AUDIO_DIR"], current_app.config["IMAGE_DIR"]
-    pool = [p for p in catalog["pairs"] if p.get("role", "pool") == "pool"]
-    per_tag = Counter(p["tag"] for p in pool)
+def package_checks(records, scenarios, completed):
     checks = []
 
     def add(name, ok, detail):
         checks.append({"name": name, "ok": bool(ok), "detail": detail})
 
-    add("Pares por tag", len(set(per_tag.values())) == 1 and set(per_tag) == set(catalog["tags"]),
-        ", ".join(f"{t}: {per_tag.get(t, 0)}" for t in catalog["tags"]))
-    need = current_app.config["PAIRS_PER_TAG"]
-    add("Pares suficientes por participante", all(per_tag.get(t, 0) >= need for t in catalog["tags"]),
-        f"cada participante ouve {need} por tag")
-    bad = [p["id"] for p in catalog["pairs"]
-           if songs[p["human"]]["kind"] != "human" or songs[p["genai"]]["kind"] != "genai"]
-    add("Cada par tem uma original e uma gerada", not bad, f"{len(catalog['pairs']) - len(bad)} de {len(catalog['pairs'])}")
-    wrong = [p["id"] for p in pool if songs[p["genai"]].get("tag") != p["tag"] or songs[p["human"]].get("tag") != p["tag"]]
-    add("Original e gerada têm a tag do par", not wrong, f"{len(pool) - len(wrong)} de {len(pool)}")
-    systems = Counter(songs[p["genai"]]["system"] for p in pool)
-    add("Geradas do mesmo modelo", len(systems) == 1, ", ".join(f"{s}: {n}" for s, n in systems.items()))
-    tids = Counter(str(p["game"]["tid"]) for p in catalog["pairs"])
-    add("Um jogo por par", max(tids.values()) == 1, f"{len(tids)} jogos distintos")
-    used = Counter(p["human"] for p in catalog["pairs"]) + Counter(p["genai"] for p in catalog["pairs"])
-    add("Nenhum clipe repetido entre pares", max(used.values()) == 1, f"{len(used)} clipes")
-    missing = [s for s in used if not (audio_dir / f"{s}.mp3").is_file()]
-    add("Arquivos de áudio presentes", not missing, f"faltam {len(missing)}" if missing else f"{len(used)} MP3")
-    missing = [p["image"] for p in catalog["pairs"] if not (image_dir / f"{p['image']}.webp").is_file()]
-    add("Imagens dos jogos presentes", not missing, f"faltam {len(missing)}" if missing else f"{len(catalog['pairs'])} imagens")
-    lengths = {round(songs[s].get("seconds", 0)) for s in used}
-    add("Clipes com a mesma duração", len(lengths) == 1, ", ".join(f"{x} s" for x in sorted(lengths)))
-    in_db = {p.id for p in pairs if p.active}
-    add("Banco igual ao catálogo", in_db == {p["id"] for p in catalog["pairs"]}, f"{len(in_db)} pares ativos no banco")
+    add("Cenários no pacote", len(records) == 240, f"{len(records)} cenários")
+    orders = sorted(r["collection_order_v2"] for r in records.values())
+    add("Fila contínua (collection_order_v2)", orders == list(range(len(records))),
+        f"de {orders[0]} a {orders[-1]}" if orders else "vazia")
+    missing, formats = audit_files(current_app.config["STUDY_DIR"], tuple(sorted(records)))
+    add("Arquivos presentes", not missing,
+        f"faltam {len(missing)}: {', '.join(missing[:3])}" if missing else f"{len(records)} imagens e {4 * len(records)} áudios")
+    add("Áudios no mesmo formato", len(formats) == 1,
+        "; ".join(f"{n} arquivos: {ch} canal, {bits} bits, {rate} Hz, {sec:g} s" for (ch, bits, rate, sec), n in formats.items()))
+    descriptions = [r for r in records.values() if not (r.get("description") or "").strip()]
+    add("Todo cenário tem descrição", not descriptions, f"{len(records) - len(descriptions)} de {len(records)}")
+    add("Banco igual ao pacote", {s.external_id: s.position for s in scenarios}
+        == {eid: r["collection_order_v2"] for eid, r in records.items()}, f"{len(scenarios)} cenários no banco")
+    per_scenario = Counter(r.scenario_id for r in completed)
+    repeated = [eid for eid, n in per_scenario.items() if n > 1]
+    add("Nenhum cenário avaliado duas vezes", not repeated, f"{len(per_scenario)} cenários avaliados")
+    by_id = {s.external_id: s for s in scenarios}
+    loose = [r.id for r in completed if by_id[r.scenario_id].holder_id != r.id or by_id[r.scenario_id].completed_at is None]
+    add("Avaliação e fila coerentes", not loose and len(per_scenario) == sum(1 for s in scenarios if s.completed_at),
+        f"{sum(1 for s in scenarios if s.completed_at)} cenários fora da fila")
+    bad = [r.id for r in completed if any(v not in (1, 2, 3, 4, 5) for v in r.ratings.values())]
+    add("Quatro notas de 1 a 5 em toda avaliação", not bad, f"{len(completed) - len(bad)} de {len(completed)}")
     return checks
 
 
 @admin.get("/")
 def panel():
-    catalog = current_app.config["CATALOG"]
-    songs = {s["id"]: s for s in catalog["songs"]}
-    pairs = Pair.query.all()
+    study = current_app.config["STUDY"]
+    records = current_app.config["SCENARIOS"]
+    now = utcnow()
+    scenarios = Scenario.query.order_by(Scenario.position).all()
     participants = Participant.query.all()
-    answered = Response.query.filter(Response.answered_at.isnot(None)).all()
-    assigned = Response.query.count()
+    reservations = Reservation.query.all()
+    by_id = {r.id: r for r in reservations}
+    completed = sorted((r for r in reservations if r.state == "completed"), key=lambda r: r.completed_at, reverse=True)
 
-    by_participant = defaultdict(list)
-    for r in answered:
-        by_participant[r.participant_id].append(r)
-    started = len(by_participant)
-    per_participant = len(catalog["tags"]) * current_app.config["PAIRS_PER_TAG"] + sum(
-        1 for p in catalog["pairs"] if p.get("role") == "anchor")
-    finished = sum(1 for rs in by_participant.values() if len(rs) >= per_participant)
-    completed = [p for p in participants if p.profile_completed_at]
-    times = [r.time_spent_ms / 1000 for r in answered if r.time_spent_ms]
+    queue = []
+    for s in scenarios:
+        holder = by_id.get(s.holder_id)
+        if s.completed_at:
+            state = "done"
+        elif holder is not None and holder.expires_at > now:
+            state = "held"
+        else:
+            state = "free"
+        queue.append({"scenario": s, "state": state, "holder": holder, "record": records[s.external_id]})
+    counts = Counter(q["state"] for q in queue)
 
-    questions = sorted({r.question for r in answered}) or [current_app.config["STUDY_QUESTION"]]
-    results = []
-    for question in questions:
-        rs = [r for r in answered if r.question == question and r.pair.role == "pool"]
-        fresh = [r for r in rs if r.familiarity == 0]
-        rows = [{"label": "Todos os pares", **summary(rs)},
-                {"label": "Só quem não conhecia o jogo nem a música", **summary(fresh)}]
-        rows += [{"label": f"Tag {tag}", **summary([r for r in rs if r.pair.tag == tag])} for tag in catalog["tags"]]
-        anchor = [r for r in answered if r.question == question and r.pair.role == "anchor"]
-        rows.append({"label": "Par de controle (original contra Markov)", **summary(anchor)})
-        results.append({"question": question, "label": QUESTION_LABELS[question], "rows": rows})
-
-    by_pair = defaultdict(list)
-    for r in answered:
-        by_pair[r.pair_id].append(r)
-    spec = {p["id"]: p for p in catalog["pairs"]}
-    cards = []
-    for pair in sorted(pairs, key=lambda p: (not p.active, p.role != "pool", p.tag, p.id)):
-        s = spec.get(pair.id, {})
-        cards.append({
-            "pair": pair, "human": songs.get(pair.human_id, {}), "genai": songs.get(pair.genai_id, {}),
-            "similarity": s.get("clap_similarity"), **summary(by_pair[pair.id]),
-        })
-
-    def dist(values, labels):
-        counts = Counter(v for v in values if v is not None)
-        return [(labels[i], counts.get(i, 0)) for i in range(len(labels))]
-
-    ages = [p.age for p in completed if p.age]
-    profile = {
-        "n": len(completed),
-        "age": (round(statistics.mean(ages), 1), statistics.median(ages)) if ages else None,
-        "language": Counter(p.language for p in completed).most_common(),
-        "practical": dist([p.practical_experience for p in completed], LEVELS),
-        "formal": dist([p.formal_experience for p in completed], LEVELS),
-        "chiptune": dist([p.chiptune_familiarity for p in completed], CHIPTUNE),
-        "knows_ai": sum(1 for p in completed if p.knows_ai_music),
+    profiled = [p for p in participants if p.profile_completed_at]
+    times = [r.time_spent_ms / 1000 for r in completed if r.time_spent_ms]
+    labels = [s["label"] for s in study["scale"]]
+    by_slot = {slot: Counter(r.ratings[slot] for r in completed) for slot in SLOTS}
+    overall = Counter()
+    for c in by_slot.values():
+        overall.update(c)
+    ratings = {
+        "labels": labels,
+        "rows": [{"label": f"Player {slot}", "counts": [by_slot[slot].get(v, 0) for v in range(1, 6)],
+                  "mean": statistics.mean(r.ratings[slot] for r in completed) if completed else None}
+                 for slot in SLOTS],
+        "total": [overall.get(v, 0) for v in range(1, 6)],
     }
-    days = Counter(r.answered_at.strftime("%d/%m") for r in sorted(answered, key=lambda r: r.answered_at))
-    comments = [r for r in sorted(answered, key=lambda r: r.answered_at, reverse=True) if r.comments]
+    profile = [
+        {"label": field["label"],
+         "rows": [(label, sum(1 for p in profiled if getattr(p, field["name"]) == code)) for code, label in field["options"]]}
+        for field in questionnaire.FIELDS
+    ]
+    days = Counter(r.completed_at.strftime("%d/%m") for r in sorted(completed, key=lambda r: r.completed_at))
+
+    show_all = request.args.get("todos") == "1"
+    upcoming = [q for q in queue if q["state"] != "done"]
+    done = sorted((q for q in queue if q["state"] == "done"), key=lambda q: q["scenario"].completed_at, reverse=True)
+    cards = done + (upcoming if show_all else upcoming[:8])
 
     return render_template(
         "admin.html",
-        question=QUESTION_LABELS[current_app.config["STUDY_QUESTION"]],
+        study=study, version=questionnaire.VERSION, minutes=current_app.config["RESERVATION_MINUTES"],
         totals={
-            "registered": len(participants), "started": started, "finished": finished,
-            "completed": len(completed), "answers": len(answered), "assigned": assigned,
+            "registered": len(participants), "profiled": len(profiled),
+            "finished": sum(1 for p in participants if p.finished_at),
+            "done": counts["done"], "held": counts["held"], "free": counts["free"], "total": len(queue),
+            "lost": sum(1 for r in reservations if r.state == "lost"),
             "median_time": round(statistics.median(times)) if times else None,
         },
-        results=results, checks=catalog_checks(catalog, pairs), cards=cards, profile=profile,
-        days=list(days.items()), comments=comments[:200], familiarity=dist([r.familiarity for r in answered], FAMILIARITY),
-        catalog=catalog,
+        queue=queue, checks=package_checks(records, scenarios, completed), ratings=ratings, profile=profile,
+        days=list(days.items()), cards=cards, show_all=show_all, hidden=len(upcoming) - 8, slots=SLOTS,
     )
 
 
-@admin.get("/answers.csv")
-def answers_csv():
+@admin.get("/ratings.csv")
+def ratings_csv():
     out = io.StringIO()
     write_csv(out)
     return HttpResponse(out.getvalue(), mimetype="text/csv",
-                        headers={"Content-Disposition": "attachment; filename=answers.csv"})
+                        headers={"Content-Disposition": "attachment; filename=ratings.csv"})

@@ -43,7 +43,16 @@
   .tag { background: var(--blue-soft); color: #1e40af; }
   .off { background: #f3f4f6; color: var(--faint); }
   .grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr)); gap: .75rem; }
-  .pairs { display: grid; grid-template-columns: repeat(auto-fill, minmax(21rem, 1fr)); gap: .75rem; }
+  .pairs { display: grid; grid-template-columns: repeat(auto-fill, minmax(24rem, 1fr)); gap: .75rem; }
+  .queue { display: grid; grid-template-columns: repeat(40, 1fr); gap: 3px; margin-top: .75rem; }
+  .queue i { aspect-ratio: 1; border-radius: 2px; background: #e5e7eb; }
+  .queue i.done { background: var(--ok); } .queue i.held { background: #f59e0b; }
+  .legend { display: flex; gap: 1rem; flex-wrap: wrap; color: var(--faint); font-size: .85rem; margin-top: .5rem; }
+  .legend i { display: inline-block; width: .7rem; height: .7rem; border-radius: 2px; margin-right: .3rem; background: #e5e7eb; }
+  .legend i.done { background: var(--ok); } .legend i.held { background: #f59e0b; }
+  .slots { display: grid; grid-template-columns: 1.2rem 2.6rem 1fr; gap: .25rem .5rem; align-items: center; margin-top: .5rem; }
+  .slots b { font-size: .9rem; } .slots span { font-variant-numeric: tabular-nums; color: var(--soft); font-size: .85rem; }
+  .slots audio { margin: 0; }
   .pair { display: grid; grid-template-columns: 6.5rem 1fr; gap: .8rem; }
   .pair img { width: 6.5rem; height: auto; image-rendering: pixelated; border-radius: .3rem; }
   .pair .meta { display: flex; gap: .4rem; flex-wrap: wrap; align-items: center; margin-bottom: .4rem; }
@@ -63,50 +72,46 @@
 <header>
   <div class="wrap">
     <h1>PICO-8 · painel dos pesquisadores</h1>
-    <a class="btn" href="/admin/answers.csv">Baixar respostas (CSV)</a>
+    <a class="btn" href="/admin/ratings.csv">Baixar avaliações (CSV)</a>
   </div>
 </header>
 <main class="wrap">
-  <p class="warn">Esta página mostra o gabarito (qual faixa é a original). Não compartilhe prints nem o link com participantes.</p>
-
-  <h2>Coleta</h2>
-  <p class="lead">Pergunta ativa: <strong>{{ question }}</strong></p>
+    <h2>Coleta</h2>
+  <p class="lead">Pergunta feita para cada música: <strong>{{ study.question }}</strong> Cada participante avalia {{ study.scenarios_per_participant }} cenários, com quatro players (A, B, C e D) em cada um.</p>
   <div class="kpis">
     <div class="kpi"><b>{{ totals.registered }}</b><span>e-mails registrados</span></div>
-    <div class="kpi"><b>{{ totals.started }}</b><span>responderam ao menos um par</span></div>
-    <div class="kpi"><b>{{ totals.finished }}</b><span>responderam todos os pares</span></div>
-    <div class="kpi"><b>{{ totals.completed }}</b><span>concluíram com o perfil</span></div>
-    <div class="kpi"><b>{{ totals.answers }}</b><span>respostas, de {{ totals.assigned }} pares sorteados</span></div>
-    <div class="kpi"><b>{% if totals.median_time is none %}–{% else %}{{ totals.median_time }} s{% endif %}</b><span>tempo mediano por par</span></div>
+    <div class="kpi"><b>{{ totals.profiled }}</b><span>responderam o questionário inicial</span></div>
+    <div class="kpi"><b>{{ totals.finished }}</b><span>avaliaram todos os seus cenários</span></div>
+    <div class="kpi"><b>{{ totals.done }}</b><span>cenários avaliados, de {{ totals.total }}</span></div>
+    <div class="kpi"><b>{{ totals.held }}</b><span>cenários reservados agora</span></div>
+    <div class="kpi"><b>{% if totals.median_time is none %}–{% else %}{{ totals.median_time }} s{% endif %}</b><span>tempo mediano por cenário</span></div>
+  </div>
+  <div class="card" style="margin-top:.75rem">
+    <h3>Fila de coleta, na ordem do pacote</h3>
+    <div class="queue">{% for q in queue %}<i class="{{ q.state }}" title="{{ q.scenario.position }}"></i>{% endfor %}</div>
+    <div class="legend"><span><i class="done"></i>avaliado ({{ totals.done }})</span><span><i class="held"></i>reservado ({{ totals.held }})</span><span><i></i>livre ({{ totals.free }})</span></div>
+    <p class="muted" style="margin:.6rem 0 0">Uma reserva vale {{ minutes }} minutos sem atividade do participante; depois disso o cenário pode ir para a próxima pessoa. {{ totals.lost }} reservas já foram repassadas assim.</p>
   </div>
   {% if days %}
   <div class="card scroll" style="margin-top:.75rem">
-    <h3>Respostas por dia (UTC)</h3>
+    <h3>Cenários avaliados por dia (UTC)</h3>
     <table><tr>{% for d, n in days %}<th class="num">{{ d }}</th>{% endfor %}</tr><tr>{% for d, n in days %}<td class="num">{{ n }}</td>{% endfor %}</tr></table>
   </div>
   {% endif %}
 
-  <h2>Resultado</h2>
-  <p class="lead">Fração das respostas que escolheram a música <strong>original</strong> do jogo. 50% é empate entre original e gerada (o traço na barra). O intervalo é o de Wilson a 95% e o p é o do teste binomial exato contra 50%. Respostas de um mesmo participante não são independentes, então trate o p como indicativo; a análise final usa o modelo misto sobre o CSV.</p>
-  {% for block in results %}
-  <div class="card scroll" style="margin-bottom:.75rem">
-    <h3>{{ block.label }}</h3>
+  <h2>Notas</h2>
+  <p class="lead">Quantas vezes cada opção foi escolhida, por player. O painel não sabe a origem de cada música: essa chave fica com a equipe de pesquisa, que cruza o CSV por <code>external_id</code> e player.</p>
+  <div class="card scroll">
     <table>
-      <tr><th>Recorte</th><th class="num">Respostas</th><th class="num">Escolheram a original</th><th></th><th class="num">IC 95%</th><th class="num">p</th></tr>
-      {% for row in block.rows %}
-      <tr>
-        <td>{{ row.label }}</td><td class="num">{{ row.n }}</td><td class="num">{{ pct(row.share) }}</td>
-        <td><div class="bar">{% if row.share is not none %}<i style="width:{{ "%.1f"|format(row.share * 100) }}%"></i>{% endif %}<u></u></div></td>
-        <td class="num">{% if row.ci %}{{ pct(row.ci[0]) }} a {{ pct(row.ci[1]) }}{% else %}–{% endif %}</td>
-        <td class="num">{% if row.p is none %}–{% elif row.p < 0.001 %}&lt; 0,001{% else %}{{ ("%.3f"|format(row.p))|replace(".", ",") }}{% endif %}</td>
-      </tr>
+      <tr><th></th>{% for l in ratings.labels %}<th class="num">{{ loop.index }} · {{ l }}</th>{% endfor %}<th class="num">Média</th></tr>
+      {% for row in ratings.rows %}
+      <tr><td>{{ row.label }}</td>{% for n in row.counts %}<td class="num">{{ n }}</td>{% endfor %}<td class="num">{% if row.mean is none %}–{% else %}{{ ("%.2f"|format(row.mean))|replace(".", ",") }}{% endif %}</td></tr>
       {% endfor %}
+      <tr><td><strong>Total</strong></td>{% for n in ratings.total %}<td class="num"><strong>{{ n }}</strong></td>{% endfor %}<td></td></tr>
     </table>
   </div>
-  {% endfor %}
 
-  <h2>Conferência do catálogo</h2>
-  <p class="lead">Catálogo gerado em {{ catalog.created_at }}, clipes de {{ catalog.clip_seconds|round|int }} s, semente {{ catalog.seed }}. Modelo das geradas: <code>{{ catalog.generated.system }}</code> ({{ catalog.generated.job }}).</p>
+  <h2>Conferência do pacote</h2>
   <div class="card scroll">
     <table>
       <tr><th>Verificação</th><th>Situação</th><th>Detalhe</th></tr>
@@ -116,43 +121,38 @@
     </table>
   </div>
 
-  <h2>Pares</h2>
-  <p class="lead">Cada par é um jogo do conjunto de teste, sua música original e uma música gerada com a mesma tag. "Sorteios" é quantas vezes o par foi entregue a um participante.</p>
-  <div class="pairs">
-    {% for c in cards %}
-    <div class="card pair">
-      <a href="{{ c.pair.game_url or '#' }}" target="_blank" rel="noopener noreferrer"><img src="/api/images/{{ c.pair.image_id }}.webp" alt="Cartucho do jogo {{ c.pair.game_tid }}" loading="lazy"></a>
-      <div>
-        <div class="meta">
-          <span class="pill tag">{{ c.pair.tag }}</span>
-          {% if c.pair.role == 'anchor' %}<span class="pill off">controle</span>{% endif %}
-          {% if not c.pair.active %}<span class="pill off">fora do catálogo</span>{% endif %}
-          <span class="muted">jogo {{ c.pair.game_tid }} · {{ c.pair.license or 'licença desconhecida' }}</span>
-        </div>
-        <div><strong>{{ pct(c.share) }}</strong> escolheram a original <span class="muted">· {{ c.n }} respostas · {{ c.pair.count }} sorteios{% if c.similarity is not none %} · CLAP {{ "%.2f"|format(c.similarity) }}{% endif %}</span></div>
-        <div class="track"><b class="h">Original</b> <code>{{ c.human.source_id }}</code><audio controls preload="none" src="/api/audio/{{ c.pair.human_id }}.mp3"></audio></div>
-        <div class="track"><b class="g">Gerada</b> <code>{{ c.genai.source_id }}</code><audio controls preload="none" src="/api/audio/{{ c.pair.genai_id }}.mp3"></audio></div>
-      </div>
-    </div>
+  <h2>Participantes</h2>
+  <p class="lead">Respostas do questionário inicial (versão {{ version }} das categorias), de {{ totals.profiled }} participantes.</p>
+  <div class="grid2">
+    {% for block in profile %}
+    <div class="card"><h3>{{ block.label }}</h3><dl class="dist">{% for l, n in block.rows %}<dt>{{ l }}</dt><dd>{{ n }}</dd>{% endfor %}</dl></div>
     {% endfor %}
   </div>
 
-  <h2>Participantes</h2>
-  <p class="lead">{{ profile.n }} perfis completos{% if profile.age %}, idade média {{ profile.age[0] }} e mediana {{ profile.age[1] }}{% endif %}{% if profile.n %}; {{ profile.knows_ai }} conhecem ferramentas de música por IA{% endif %}.</p>
-  <div class="grid2">
-    <div class="card"><h3>Experiência prática</h3><dl class="dist">{% for l, n in profile.practical %}<dt>{{ l }}</dt><dd>{{ n }}</dd>{% endfor %}</dl></div>
-    <div class="card"><h3>Formação musical</h3><dl class="dist">{% for l, n in profile.formal %}<dt>{{ l }}</dt><dd>{{ n }}</dd>{% endfor %}</dl></div>
-    <div class="card"><h3>Familiaridade com chiptune</h3><dl class="dist">{% for l, n in profile.chiptune %}<dt>{{ l }}</dt><dd>{{ n }}</dd>{% endfor %}</dl></div>
-    <div class="card"><h3>Idioma</h3><dl class="dist">{% for l, n in profile.language %}<dt>{{ l }}</dt><dd>{{ n }}</dd>{% else %}<dt class="muted">sem dados</dt><dd></dd>{% endfor %}</dl></div>
-    <div class="card"><h3>Conhecia o jogo ou a música (por resposta)</h3><dl class="dist">{% for l, n in familiarity %}<dt>{{ l }}</dt><dd>{{ n }}</dd>{% endfor %}</dl></div>
-  </div>
-
-  <h2>Comentários</h2>
-  <div class="card">
-    {% for r in comments %}
-    <div class="comment"><span class="pill tag">{{ r.pair.tag }}</span> <span class="muted">jogo {{ r.pair.game_tid }} · escolheu a {{ 'original' if r.chose_human else 'gerada' }} · {{ r.answered_at.strftime('%d/%m %H:%M') }}</span><br>{{ r.comments }}</div>
-    {% else %}
-    <span class="muted">Nenhum comentário ainda.</span>
+  <h2>Cenários</h2>
+  <p class="lead">Primeiro os avaliados, do mais recente para o mais antigo, com a nota de cada player; depois {% if show_all %}todos os que ainda estão na fila{% else %}os próximos 8 da fila{% endif %}.
+    {% if show_all %}<a href="/admin/">Mostrar só os próximos</a>{% elif hidden > 0 %}<a href="/admin/?todos=1">Mostrar os outros {{ hidden }}</a>{% endif %}</p>
+  <div class="pairs">
+    {% for q in cards %}
+    <div class="card pair">
+      <img src="/api/scenarios/{{ q.scenario.external_id }}/context.png" alt="Imagem do cenário {{ q.scenario.position }}" loading="lazy">
+      <div>
+        <div class="meta">
+          <span class="pill tag">nº {{ q.scenario.position }}</span>
+          {% if q.state == 'done' %}<span class="pill ok">avaliado</span>{% elif q.state == 'held' %}<span class="pill off">reservado</span>{% else %}<span class="pill off">livre</span>{% endif %}
+          {% if q.state == 'done' %}<span class="muted">{{ q.scenario.completed_at.strftime('%d/%m %H:%M') }}{% if q.holder and q.holder.time_spent_ms %} · {{ (q.holder.time_spent_ms / 1000)|round|int }} s{% endif %}</span>{% endif %}
+        </div>
+        <div style="white-space:normal">{{ q.record.description }}</div>
+        <div class="muted" style="font-size:.75rem;margin-top:.25rem"><code>{{ q.scenario.external_id }}</code></div>
+        <div class="slots">
+          {% for slot in slots %}
+          <b>{{ slot }}</b>
+          <span>{% if q.state == 'done' and q.holder %}nota {{ q.holder.ratings[slot] }}{% else %}–{% endif %}</span>
+          <audio controls preload="none" src="/api/scenarios/{{ q.scenario.external_id }}/{{ slot }}.wav"></audio>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
     {% endfor %}
   </div>
   <footer>Horários em UTC. Os participantes são identificados só por um HMAC do e-mail.</footer>

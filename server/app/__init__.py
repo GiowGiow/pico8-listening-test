@@ -4,10 +4,10 @@ from flask import Flask, jsonify
 
 from .admin import admin
 from .api import api
-from .catalog import ensure_schema, load_catalog, sync_catalog
 from .config import load_config
 from .db import db
 from .limiter import limiter
+from .scenarios import load_package, sync_scenarios
 
 
 def create_app(overrides=None):
@@ -21,14 +21,13 @@ def create_app(overrides=None):
     db.init_app(app)
     limiter.init_app(app)
 
-    catalog = load_catalog(app.config["CATALOG_PATH"])
-    app.config["CATALOG"] = catalog
-    app.config["CATALOG_TAGS"] = catalog["tags"]
-    app.config["AUDIO_IDS"] = frozenset(s["id"] for s in catalog["songs"])
-    app.config["IMAGE_IDS"] = frozenset(p["image"] for p in catalog["pairs"])
+    study, scenarios = load_package(app.config["STUDY_DIR"])
+    app.config["STUDY"] = study
+    app.config["SCENARIOS"] = {s["external_id"]: s for s in scenarios}
     with app.app_context():
-        ensure_schema()
-        sync_catalog(catalog)
+        db.create_all()
+        sync_scenarios(scenarios)
+    logging.getLogger(__name__).info("package loaded: %d scenarios", len(scenarios))
 
     app.register_blueprint(api)
     app.register_blueprint(admin)

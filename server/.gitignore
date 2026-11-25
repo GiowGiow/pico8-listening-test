@@ -3,11 +3,8 @@ __pycache__/
 .venv/
 data/
 .pytest_cache/
-# The catalog is built by tools/prepare_pairs.py and baked into the image.
-# catalog.json is the answer key (which clip of each pair is the original), so
-# it stays out of the repository while the study is running.
-catalog/catalog.json
-catalog/audio/
-catalog/images/
+# The research package (study.json, scenarios.json, scenarios/) comes from the
+# research team and is baked into the image; it is 2.4 GB of audio.
+study/
+catalog/
 .cache/
-catalog/work/

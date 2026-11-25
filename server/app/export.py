@@ -1,10 +1,12 @@
-"""Export answers as CSV, one row per answered pair.
+"""Export the ratings as CSV, one row per rated scenario.
 
 Run inside the pod:
-    kubectl -n pico8-percept exec deploy/server -- python -m app.export > answers.csv
+    kubectl -n pico8-percept exec deploy/server -- python -m app.export > ratings.csv
 
-Columns name each track by system and kind, so the analysis needs nothing else
-from the catalog. The participant id is the HMAC, never the e-mail.
+The research team joins `external_id` and the slot (A to D) with its own key
+to know what each clip was; nothing here says it. The questionnaire columns
+hold the option codes of app/questionnaire.py at `questionnaire_version`. The
+participant id is the HMAC, never the e-mail.
 """
 
 import csv
@@ -12,39 +14,36 @@ import sys
 
 from flask import current_app
 
-from .models import Participant, Response
+from . import questionnaire
+from .models import Participant, Reservation
 
 COLUMNS = [
-    "participant_id", "position", "question", "pair_id", "pair_role", "tag", "game_tid", "clap_similarity",
-    "track_a_id", "track_a_system", "track_a_kind", "track_a_source",
-    "track_b_id", "track_b_system", "track_b_kind", "track_b_source",
-    "choice", "chose_human", "familiarity", "comments",
-    "time_spent_ms", "listened_a_s", "listened_b_s", "assigned_at", "answered_at",
-    "age", "language", "formal_experience", "practical_experience", "knows_ai_music",
-    "chiptune_familiarity", "ui_locale", "participant_created_at", "profile_completed_at",
+    "participant_id", "presented_order", "external_id", "collection_order_v2",
+    "rating_A", "rating_B", "rating_C", "rating_D",
+    "time_spent_ms", "listened_A_s", "listened_B_s", "listened_C_s", "listened_D_s",
+    "reserved_at", "completed_at",
+    *questionnaire.CODES, "questionnaire_version", "ui_locale", "participant_created_at",
 ]
 
 
 def write_csv(out):
-    """Write every answered pair to the file-like object `out`."""
-    similarity = {p["id"]: p.get("clap_similarity", "") for p in current_app.config["CATALOG"]["pairs"]}
+    """Write every rated scenario to the file-like object `out`."""
+    records = current_app.config["SCENARIOS"]
     writer = csv.writer(out)
     writer.writerow(COLUMNS)
-    rows = (Response.query.join(Participant).filter(Response.answered_at.isnot(None))
-            .order_by(Participant.created_at, Response.position))
+    rows = (Reservation.query.join(Participant).filter(Reservation.state == "completed")
+            .order_by(Participant.created_at, Participant.id, Reservation.completed_at))
+    order = {}
     for r in rows:
         p = r.participant
+        order[p.id] = order.get(p.id, 0) + 1
         writer.writerow([
-            p.id, r.position, r.question, r.pair_id, r.pair.role, r.pair.tag, r.pair.game_tid,
-            similarity.get(r.pair_id, ""),
-            r.track_a.id, r.track_a.system, r.track_a.kind, r.track_a.source_id,
-            r.track_b.id, r.track_b.system, r.track_b.kind, r.track_b.source_id,
-            r.choice, int(r.chose_human), r.familiarity, r.comments or "",
-            r.time_spent_ms, r.listened_a_s, r.listened_b_s,
-            r.assigned_at.isoformat(), r.answered_at.isoformat(),
-            p.age, p.language, p.formal_experience, p.practical_experience, p.knows_ai_music,
-            p.chiptune_familiarity, p.ui_locale, p.created_at.isoformat(),
-            p.profile_completed_at.isoformat() if p.profile_completed_at else "",
+            p.id, order[p.id], r.scenario_id, records[r.scenario_id]["collection_order_v2"],
+            r.rating_a, r.rating_b, r.rating_c, r.rating_d,
+            r.time_spent_ms, r.listened_a_s, r.listened_b_s, r.listened_c_s, r.listened_d_s,
+            r.reserved_at.isoformat(), r.completed_at.isoformat(),
+            *(getattr(p, name) for name in questionnaire.CODES),
+            p.questionnaire_version, p.ui_locale, p.created_at.isoformat(),
         ])
 
 
