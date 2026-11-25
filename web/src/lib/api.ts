@@ -55,19 +55,32 @@ export async function api<T>(path: string, options: { method?: string; json?: un
   return data as T;
 }
 
-export type Status = "new" | "in_progress" | "pending_profile" | "completed";
+export type Status = "pending_profile" | "in_progress" | "completed" | "study_full";
 
-export type Question = "fit" | "ai" | "preference";
+export const SLOTS = ["A", "B", "C", "D"] as const;
+export type Slot = (typeof SLOTS)[number];
 
-export interface Pair {
-  response_id: string;
-  position: number;
-  question: Question;
-  tag: string;
+export interface Scenario {
+  reservation_id: string;
+  heading: string;
+  description: string;
   image: string;
-  track_a: string;
-  track_b: string;
+  audios: Record<Slot, string>;
   answered: boolean;
 }
 
-export const PAIRS_PER_PARTICIPANT = 9;
+export interface Option {
+  value: string;
+  label: string;
+}
+
+/** Texts of the study, served by the API exactly as the research package gives them. */
+export interface Study {
+  heading: string;
+  question: string;
+  scale: { value: number; label: string }[];
+  scenarios_per_participant: number;
+  questionnaire: { version: string; fields: { name: string; label: string; options: Option[] }[] };
+}
+
+export const SCENARIOS_PER_PARTICIPANT = 2;

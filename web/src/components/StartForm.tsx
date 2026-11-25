@@ -30,7 +30,7 @@ export default function StartForm() {
         return;
       }
       setParticipant(res.participant_id);
-      window.location.href = res.status === "pending_profile" ? "/register" : "/instructions";
+      window.location.href = res.status === "pending_profile" ? "/register" : "/survey";
     } catch (err) {
       const code = err instanceof ApiError ? err : null;
       if (code?.status === 400) setError(m.home_error_email());

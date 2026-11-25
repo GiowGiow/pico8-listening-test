@@ -1,13 +1,16 @@
-import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent, type ReactNode } from "react";
 import * as m from "../paraglide/messages.js";
 
-export const HEARD_SECONDS = 15;
+export const HEARD_SECONDS = 10;
 const PLAY_EVENT = "p8percept:play";
 
 interface Props {
-  track: 1 | 2;
+  /** The player's letter, the only name the participant sees. */
+  track: string;
   src: string;
   onListened: (seconds: number) => void;
+  /** The question about this clip, shown under the player. */
+  children?: ReactNode;
 }
 
 function clock(seconds: number) {
@@ -16,18 +19,18 @@ function clock(seconds: number) {
 }
 
 /**
- * One clip with a play button and a seek bar. Only one track plays at a
- * time: starting one pauses the other through a window event. Listening time
+ * One clip with a play button and a seek bar. Only one clip plays at a
+ * time: starting one pauses the others through a window event. Listening time
  * is accumulated from actual playback, so seeking forward does not count.
  */
-export default function TrackPlayer({ track, src, onListened }: Props) {
+export default function TrackPlayer({ track, src, onListened, children }: Props) {
   const audio = useRef<HTMLAudioElement>(null);
   const strip = useRef<HTMLDivElement>(null);
   const last = useRef<number | null>(null);
   const listened = useRef(0);
   const [playing, setPlaying] = useState(false);
   const [time, setTime] = useState(0);
-  const [duration, setDuration] = useState(20);
+  const [duration, setDuration] = useState(30);
   const [heard, setHeard] = useState(false);
 
   useEffect(() => {
@@ -40,7 +43,7 @@ export default function TrackPlayer({ track, src, onListened }: Props) {
 
   useEffect(() => {
     const other = (e: Event) => {
-      if ((e as CustomEvent<number>).detail !== track) audio.current?.pause();
+      if ((e as CustomEvent<string>).detail !== track) audio.current?.pause();
     };
     window.addEventListener(PLAY_EVENT, other);
     return () => window.removeEventListener(PLAY_EVENT, other);
@@ -105,7 +108,7 @@ export default function TrackPlayer({ track, src, onListened }: Props) {
   return (
     <section className="screen track" aria-label={m.survey_track({ n: track })}>
       <div className="track-head">
-        <span className="track-name">{m.survey_track({ n: track })}</span>
+        <span className="track-name" aria-hidden="true">{track}</span>
         <span className="track-heard" data-heard={heard ? "true" : "false"}>
           {heard ? `✓ ${m.survey_heard()}` : m.survey_listen_left({ s: Math.ceil(HEARD_SECONDS - Math.min(listened.current, HEARD_SECONDS)) })}
         </span>
@@ -148,7 +151,7 @@ export default function TrackPlayer({ track, src, onListened }: Props) {
       <audio
         ref={audio}
         src={src}
-        preload="auto"
+        preload="metadata"
         onPlay={() => {
           last.current = audio.current?.currentTime ?? 0;
           setPlaying(true);
@@ -159,8 +162,9 @@ export default function TrackPlayer({ track, src, onListened }: Props) {
           last.current = null;
         }}
         onTimeUpdate={onTimeUpdate}
-        onLoadedMetadata={() => setDuration(audio.current?.duration || 20)}
+        onLoadedMetadata={() => setDuration(audio.current?.duration || 30)}
       />
+      {children}
     </section>
   );
 }

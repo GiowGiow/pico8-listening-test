@@ -1,61 +1,75 @@
 import { useEffect, useRef, useState } from "react";
-import { ApiError, api, getParticipant, type Pair, type Status } from "../lib/api";
+import { ApiError, api, clearParticipant, getParticipant, SLOTS, type Scenario, type Slot, type Status, type Study } from "../lib/api";
 import * as m from "../paraglide/messages.js";
 import TrackPlayer, { HEARD_SECONDS } from "./TrackPlayer";
 
-type Load = "loading" | "ready" | "no_participant" | "error";
-
-interface Answer {
-  choice: number | null;
-  familiarity: number | null;
-  comments: string;
+type Load = "loading" | "ready" | "no_participant" | "full" | "error";
+type PerSlot<T> = Record<Slot, T>;
+interface Session {
+  status: Status;
+  scenarios: Scenario[];
 }
 
-const EMPTY: Answer = { choice: null, familiarity: null, comments: "" };
+const NO_RATINGS: PerSlot<number | null> = { A: null, B: null, C: null, D: null };
+const NOT_HEARD: PerSlot<number> = { A: 0, B: 0, C: 0, D: 0 };
+// Asking for the session again tells the server this participant is still
+// here, so the scenarios they hold are not handed to someone else.
+const KEEP_ALIVE_MS = 5 * 60 * 1000;
 
-const QUESTIONS = { fit: m.survey_q_fit, ai: m.survey_q_ai, preference: m.survey_q_preference };
-const TAGS: Record<string, () => string> = {
-  platformer: m.tag_platformer,
-  puzzle: m.tag_puzzle,
-  arcade: m.tag_arcade,
-  shmup: m.tag_shmup,
-  shooter: m.tag_shooter,
-  action: m.tag_action,
-};
-
+/**
+ * One scenario at a time: the game's picture and description, then the four
+ * players A to D in the order of the research package, each with the same
+ * question and the same five answers.
+ */
 export default function Survey() {
   const [load, setLoad] = useState<Load>("loading");
-  const [pairs, setPairs] = useState<Pair[]>([]);
+  const [study, setStudy] = useState<Study | null>(null);
+  const [scenarios, setScenarios] = useState<Scenario[]>([]);
   const [index, setIndex] = useState(0);
-  const [answer, setAnswer] = useState<Answer>(EMPTY);
-  const [listened, setListened] = useState<[number, number]>([0, 0]);
+  const [ratings, setRatings] = useState(NO_RATINGS);
+  const [listened, setListened] = useState(NOT_HEARD);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState(false);
+  const [replaced, setReplaced] = useState(false);
   const started = useRef(Date.now());
   const heading = useRef<HTMLHeadingElement>(null);
+
+  function show(session: Session) {
+    if (session.status === "completed") {
+      clearParticipant();
+      window.location.href = "/thank-you";
+      return;
+    }
+    if (session.status === "pending_profile") {
+      window.location.href = "/register";
+      return;
+    }
+    if (session.status === "study_full") {
+      setLoad("full");
+      return;
+    }
+    const first = session.scenarios.findIndex((s) => !s.answered);
+    setScenarios(session.scenarios);
+    setIndex(first < 0 ? 0 : first);
+    setRatings(NO_RATINGS);
+    setListened(NOT_HEARD);
+    started.current = Date.now();
+    setLoad("ready");
+  }
 
   useEffect(() => {
     if (!getParticipant()) {
       setLoad("no_participant");
       return;
     }
-    api<{ status: Status; pairs: Pair[] }>("/session")
-      .then((res) => {
-        if (res.status === "completed") {
-          window.location.href = "/thank-you";
-          return;
-        }
-        if (res.status === "pending_profile") {
-          window.location.href = "/register";
-          return;
-        }
-        const first = res.pairs.findIndex((p) => !p.answered);
-        setPairs(res.pairs);
-        setIndex(first < 0 ? 0 : first);
-        started.current = Date.now();
-        setLoad("ready");
+    Promise.all([api<Study>("/study"), api<Session>("/session")])
+      .then(([texts, session]) => {
+        setStudy(texts);
+        show(session);
       })
       .catch((err) => setLoad(err instanceof ApiError && err.status === 401 ? "no_participant" : "error"));
+    const keepAlive = window.setInterval(() => void api<Session>("/session").catch(() => undefined), KEEP_ALIVE_MS);
+    return () => window.clearInterval(keepAlive);
   }, []);
 
   if (load === "loading") return <p className="muted">{m.survey_loading()}</p>;
@@ -65,7 +79,14 @@ export default function Survey() {
         {m.survey_error_load()}
       </p>
     );
-  if (load === "no_participant")
+  if (load === "full")
+    return (
+      <div className="screen">
+        <h1>{m.survey_full_title()}</h1>
+        <p className="muted">{m.survey_full_text()}</p>
+      </div>
+    );
+  if (load === "no_participant" || !study)
     return (
       <div className="screen">
         <h1>{m.survey_need_registration_title()}</h1>
@@ -78,156 +99,130 @@ export default function Survey() {
       </div>
     );
 
-  const pair = pairs[index];
-  const isLast = index === pairs.length - 1;
-  const heardBoth = listened[0] >= HEARD_SECONDS && listened[1] >= HEARD_SECONDS;
-  const complete = answer.choice !== null && answer.familiarity !== null;
+  const scenario = scenarios[index];
+  const isLast = index === scenarios.length - 1;
+  const heardAll = SLOTS.every((slot) => listened[slot] >= HEARD_SECONDS);
+  const complete = SLOTS.every((slot) => ratings[slot] !== null);
 
   async function next() {
-    if (!complete || !heardBoth || saving) return;
+    if (!complete || !heardAll || saving) return;
     setSaving(true);
     setSaveError(false);
+    setReplaced(false);
+    let status: Status;
     try {
-      await api(`/responses/${pair.response_id}`, {
+      const res = await api<{ status: Status }>(`/ratings/${scenario.reservation_id}`, {
         method: "POST",
         json: {
-          choice: answer.choice,
-          familiarity: answer.familiarity,
-          comments: answer.comments.slice(0, 2000),
+          ratings,
           time_spent_ms: Date.now() - started.current,
-          listened_a_s: Math.round(listened[0] * 10) / 10,
-          listened_b_s: Math.round(listened[1] * 10) / 10,
+          listened: Object.fromEntries(SLOTS.map((slot) => [slot, Math.round(listened[slot] * 10) / 10])),
         },
       });
+      status = res.status;
     } catch (err) {
-      // 409: already saved (a retry after a lost reply), so move on
-      if (!(err instanceof ApiError && err.status === 409)) {
+      if (err instanceof ApiError && err.code === "reservation_lost") {
+        // The scenario went to someone else: load whatever this participant holds now.
+        try {
+          show(await api<Session>("/session"));
+          setReplaced(true);
+        } catch {
+          setSaveError(true);
+        }
+      } else {
         setSaveError(true);
-        setSaving(false);
-        return;
       }
-    }
-    if (isLast) {
-      window.location.href = "/register";
+      setSaving(false);
       return;
     }
-    setIndex(index + 1);
-    setAnswer(EMPTY);
-    setListened([0, 0]);
-    started.current = Date.now();
     setSaving(false);
+    if (status !== "in_progress") {
+      clearParticipant();
+      window.location.href = "/thank-you";
+      return;
+    }
+    if (isLast) {
+      // More scenarios were expected than this page knows of: ask again.
+      show(await api<Session>("/session"));
+    } else {
+      setIndex(index + 1);
+      setRatings(NO_RATINGS);
+      setListened(NOT_HEARD);
+      started.current = Date.now();
+    }
     window.scrollTo({ top: 0, behavior: "smooth" });
     heading.current?.focus();
   }
-
-  const choiceOptions: [number, string][] = [
-    [1, m.survey_track({ n: 1 })],
-    [2, m.survey_track({ n: 2 })],
-  ];
-  const knownOptions: [number, string][] = [
-    [0, m.survey_q_known_none()],
-    [1, m.survey_q_known_game()],
-    [2, m.survey_q_known_song()],
-    [3, m.survey_q_known_both()],
-  ];
-  const question = (QUESTIONS[pair.question] ?? m.survey_q_fit)();
-  const tag = TAGS[pair.tag]?.() ?? pair.tag;
 
   return (
     <div className="survey">
       <div className="survey-head">
         <h1 ref={heading} tabIndex={-1} className="survey-title">
-          {m.survey_pair_of({ current: index + 1, total: pairs.length })}
+          {m.survey_pair_of({ current: index + 1, total: scenarios.length })}
         </h1>
         <div className="pair-progress" aria-hidden="true">
-          {pairs.map((p, i) => (
-            <span key={p.response_id} data-state={i < index ? "done" : i === index ? "current" : "todo"} />
+          {scenarios.map((s, i) => (
+            <span key={s.reservation_id} data-state={i < index ? "done" : i === index ? "current" : "todo"} />
           ))}
         </div>
       </div>
+      {replaced && (
+        <p className="alert" role="status">
+          {m.survey_lost()}
+        </p>
+      )}
 
-      <section className="screen game" aria-label={m.survey_game_label()}>
-        <img className="game-image" src={pair.image} alt={m.survey_game_alt()} width={480} height={615} />
+      <section className="screen game" aria-labelledby="context-heading">
+        <img className="game-image" src={scenario.image} alt={m.survey_image_alt()} width={160} height={205} />
         <div>
-          <span className="game-tag">{m.survey_game_tag({ tag })}</span>
-          <p className="game-question">{question}</p>
-          <p className="game-hint">{m.survey_game_hint()}</p>
+          <h2 id="context-heading" className="game-heading">
+            {scenario.heading}
+          </h2>
+          <p className="game-description">{scenario.description}</p>
         </div>
       </section>
 
-      <div className="tracks">
-        <TrackPlayer
-          key={pair.track_a}
-          track={1}
-          src={pair.track_a}
-          onListened={(s) => setListened((l) => (s > l[0] ? [s, l[1]] : l))}
-        />
-        <TrackPlayer
-          key={pair.track_b}
-          track={2}
-          src={pair.track_b}
-          onListened={(s) => setListened((l) => (s > l[1] ? [l[0], s] : l))}
-        />
-      </div>
-
-      <form className="screen survey-form" onSubmit={(e) => (e.preventDefault(), void next())}>
-        <fieldset className="question">
-          <legend>{question}</legend>
-          <div className="options two">
-            {choiceOptions.map(([value, label]) => (
-              <label key={value} className="option">
-                <input
-                  type="radio"
-                  name="choice"
-                  value={value}
-                  checked={answer.choice === value}
-                  onChange={() => setAnswer({ ...answer, choice: value })}
-                />
-                <span>{label}</span>
-              </label>
-            ))}
-          </div>
-        </fieldset>
-
-        <fieldset className="question question-gap">
-          <legend>{m.survey_q_known()}</legend>
-          <div className="options">
-            {knownOptions.map(([value, label]) => (
-              <label key={value} className="option">
-                <input
-                  type="radio"
-                  name="familiarity"
-                  value={value}
-                  checked={answer.familiarity === value}
-                  onChange={() => setAnswer({ ...answer, familiarity: value })}
-                />
-                <span>{label}</span>
-              </label>
-            ))}
-          </div>
-        </fieldset>
-        <div className="question-gap">
-          <label htmlFor="comments" className="field-label">
-            {m.survey_q_comments()}
-          </label>
-          <textarea
-            id="comments"
-            className="input"
-            rows={3}
-            maxLength={2000}
-            placeholder={m.survey_q_comments_placeholder()}
-            value={answer.comments}
-            onChange={(e) => setAnswer({ ...answer, comments: e.target.value })}
-          />
+      <form onSubmit={(e) => (e.preventDefault(), void next())}>
+        <div className="tracks">
+          {SLOTS.map((slot) => {
+            const heard = listened[slot] >= HEARD_SECONDS;
+            return (
+              <TrackPlayer
+                key={scenario.audios[slot]}
+                track={slot}
+                src={scenario.audios[slot]}
+                onListened={(s) => setListened((l) => (s > l[slot] ? { ...l, [slot]: s } : l))}
+              >
+                <fieldset className="rating" disabled={!heard}>
+                  <legend>{study.question}</legend>
+                  <div className="scale">
+                    {study.scale.map((option) => (
+                      <label key={option.value} className="option">
+                        <input
+                          type="radio"
+                          name={`rating-${slot}`}
+                          value={option.value}
+                          checked={ratings[slot] === option.value}
+                          onChange={() => setRatings({ ...ratings, [slot]: option.value })}
+                        />
+                        <span>{option.label}</span>
+                      </label>
+                    ))}
+                  </div>
+                  {!heard && <p className="rating-hint">{m.survey_listen_first()}</p>}
+                </fieldset>
+              </TrackPlayer>
+            );
+          })}
         </div>
 
         <div className="survey-actions">
-          {!heardBoth && (
+          {!(heardAll && complete) && (
             <p className="muted gate" role="status">
               {m.survey_listen_gate()}
             </p>
           )}
-          <button type="submit" className="btn" disabled={!complete || !heardBoth || saving}>
+          <button type="submit" className="btn" disabled={!complete || !heardAll || saving}>
             {saving ? m.survey_saving() : isLast ? m.survey_finish() : m.survey_next()}
           </button>
         </div>

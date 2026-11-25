@@ -413,29 +413,19 @@ fieldset.question legend {
   border-radius: 0.4rem;
   box-shadow: 0 4px 10px rgb(0 0 0 / 0.25);
 }
-.game-tag {
-  display: inline-block;
-  padding: 0.15rem 0.7rem;
-  border-radius: 999px;
-  background: #dbeafe;
-  color: #1e40af;
-  font-size: 0.85rem;
-  font-weight: 600;
-  margin-bottom: 0.6rem;
-}
-.game-question {
+.game-heading {
   font-size: 1.4rem;
   font-weight: 700;
   line-height: 1.25;
 }
-.game-hint {
+.game-description {
   color: var(--ink-soft);
+  font-size: 1.05rem;
   margin-top: 0.5rem;
 }
 
 .tracks {
   display: grid;
-  grid-template-columns: 1fr 1fr;
   gap: 1rem;
   margin-top: 1.5rem;
 }
@@ -453,8 +443,61 @@ fieldset.question legend {
   margin-bottom: 0.7rem;
 }
 .track-name {
+  display: grid;
+  place-items: center;
+  width: 2.2rem;
+  height: 2.2rem;
+  border-radius: 0.5rem;
+  background: var(--ink);
+  color: #fff;
   font-weight: 700;
-  font-size: 1.1rem;
+  font-size: 1.15rem;
+}
+.rating {
+  margin-top: 1.1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--line);
+}
+.rating legend {
+  float: left;
+  width: 100%;
+  font-weight: 600;
+  margin-bottom: 0.7rem;
+}
+.scale {
+  clear: both;
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 0.5rem;
+}
+.scale .option {
+  position: relative;
+  justify-content: center;
+  text-align: center;
+  padding: 0.65rem 0.4rem;
+  min-height: 3.2rem;
+  font-weight: 600;
+  font-size: 0.95rem;
+  line-height: 1.2;
+}
+.scale .option input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+.rating:disabled .option {
+  cursor: not-allowed;
+  color: var(--ink-faint);
+  background: #f9fafb;
+  border-color: var(--line);
+}
+.rating-hint {
+  color: var(--ink-faint);
+  font-size: 0.85rem;
+  margin-top: 0.5rem;
+}
+.options.choices {
+  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
 }
 .track-heard {
   font-size: 0.85rem;
@@ -517,9 +560,6 @@ fieldset.question legend {
   font-variant-numeric: tabular-nums;
 }
 
-.survey-form {
-  margin-top: 1.5rem;
-}
 .survey-actions {
   display: flex;
   align-items: center;
@@ -587,4 +627,15 @@ fieldset.question legend {
     transition: none !important;
     scroll-behavior: auto !important;
   }
+}
+@media (max-width: 40rem) {
+  .scale {
+    grid-template-columns: 1fr;
+  }
+  .scale .option {
+    min-height: 2.6rem;
+  }
+}
+.profile fieldset + fieldset {
+  margin-top: 2rem;
 }
