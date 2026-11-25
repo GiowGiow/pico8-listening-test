@@ -10,6 +10,7 @@ import os
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+QUESTIONS = {"fit", "ai", "preference"}
 
 
 def _int(name, default):
@@ -25,6 +26,10 @@ def load_config():
     if not secret:
         secret = "development-only-secret-do-not-use-in-production"
 
+    question = os.environ.get("STUDY_QUESTION", "fit")
+    if question not in QUESTIONS:
+        raise RuntimeError(f"STUDY_QUESTION must be one of {sorted(QUESTIONS)}")
+
     return {
         "APP_ENV": env,
         "DATA_DIR": data_dir,
@@ -35,8 +40,17 @@ def load_config():
         ),
         "SQLALCHEMY_TRACK_MODIFICATIONS": False,
         "PARTICIPANT_ID_SECRET": secret,
-        # Pairs each participant hears per generative system, plus the anchor pair.
-        "PAIRS_PER_SYSTEM": _int("PAIRS_PER_SYSTEM", 3),
+        "IMAGE_DIR": Path(os.environ.get("IMAGE_DIR", ROOT / "catalog" / "images")),
+        # Pairs each participant hears per game tag, plus the anchor pair.
+        "PAIRS_PER_TAG": _int("PAIRS_PER_TAG", 2),
+        # The one question asked about every pair: "fit" (which song matches the
+        # game), "ai" (which song is AI-generated) or "preference".
+        "STUDY_QUESTION": question,
+        # Host names allowed to open /admin, which shows the answer key. The
+        # public host must never be listed here.
+        "ADMIN_HOSTS": frozenset(
+            h.strip().lower() for h in os.environ.get("ADMIN_HOSTS", "localhost,127.0.0.1").split(",") if h.strip()
+        ),
         # Hard cap on registrations, so a flood of fake e-mails cannot grow the
         # database without bound.
         "MAX_PARTICIPANTS": _int("MAX_PARTICIPANTS", 5000),

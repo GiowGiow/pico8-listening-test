@@ -138,7 +138,8 @@ def session():
         responses = Response.query.filter_by(participant_id=participant.id).order_by(Response.position).all()
         if not responses and participant.profile_completed_at is None:
             responses = assign_pairs(
-                participant, current_app.config["CATALOG_SYSTEMS"], current_app.config["PAIRS_PER_SYSTEM"]
+                participant, current_app.config["CATALOG_TAGS"], current_app.config["PAIRS_PER_TAG"],
+                current_app.config["STUDY_QUESTION"],
             )
     return jsonify({
         "status": participant_status(participant),
@@ -146,6 +147,11 @@ def session():
             {
                 "response_id": r.id,
                 "position": r.position,
+                "question": r.question,
+                # The tag is what the model was asked for, and it is the same
+                # for both tracks, so showing it gives nothing away.
+                "tag": r.pair.tag,
+                "image": f"/api/images/{r.pair.image_id}.webp",
                 "track_a": f"/api/audio/{r.track_a_id}.mp3",
                 "track_b": f"/api/audio/{r.track_b_id}.mp3",
                 "answered": r.answered,
@@ -172,8 +178,8 @@ def submit_response(response_id):
     if not isinstance(comments, str) or len(comments) > MAX_COMMENT:
         raise BadRequest("comments")
 
-    response.human_perception = int_field(data, "human_perception", 0, 4)
-    response.song_recognition = int_field(data, "song_recognition", 0, 3)
+    response.choice = int_field(data, "choice", 1, 2)
+    response.familiarity = int_field(data, "familiarity", 0, 3)
     response.comments = comments.strip() or None
     response.time_spent_ms = int(number_field(data, "time_spent_ms", 0, 6 * 3600 * 1000))
     response.listened_a_s = round(number_field(data, "listened_a_s", 0, 3600), 1)
@@ -218,6 +224,19 @@ def audio(song_id):
         abort(404)
     response = send_from_directory(
         current_app.config["AUDIO_DIR"], f"{song_id}.mp3", mimetype="audio/mpeg",
+        conditional=True, max_age=7 * 24 * 3600,
+    )
+    response.headers["Cache-Control"] = "public, max-age=604800, immutable"
+    return response
+
+
+@api.get("/images/<image_id>.webp")
+@limiter.limit("600/minute")
+def image(image_id):
+    if not SONG_RE.match(image_id) or image_id not in current_app.config["IMAGE_IDS"]:
+        abort(404)
+    response = send_from_directory(
+        current_app.config["IMAGE_DIR"], f"{image_id}.webp", mimetype="image/webp",
         conditional=True, max_age=7 * 24 * 3600,
     )
     response.headers["Cache-Control"] = "public, max-age=604800, immutable"

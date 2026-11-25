@@ -9,7 +9,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     APP_ENV=production \
     DATA_DIR=/data \
     CATALOG_PATH=/app/catalog/catalog.json \
-    AUDIO_DIR=/app/catalog/audio
+    AUDIO_DIR=/app/catalog/audio \
+    IMAGE_DIR=/app/catalog/images
 
 WORKDIR /app
 COPY requirements.txt .
@@ -20,6 +21,7 @@ RUN pip install -r requirements.txt \
 COPY app ./app
 COPY catalog/catalog.json ./catalog/catalog.json
 COPY catalog/audio ./catalog/audio
+COPY catalog/images ./catalog/images
 
 USER 10001
 EXPOSE 8000

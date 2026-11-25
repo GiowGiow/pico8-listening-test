@@ -5,4 +5,6 @@ data/
 .pytest_cache/
 # Rendered audio is produced by tools/prepare_songs.py and baked into the image.
 catalog/audio/
+catalog/images/
+.cache/
 catalog/work/

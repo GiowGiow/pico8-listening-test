@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Painel · PICO-8</title>
+<style>
+  :root {
+    --bg: #f9fafb; --card: #fff; --ink: #111827; --soft: #4b5563; --faint: #6b7280; --line: #e5e7eb;
+    --blue: #2563eb; --blue-soft: #dbeafe; --ok: #047857; --ok-soft: #d1fae5; --bad: #b91c1c; --bad-soft: #fee2e2;
+    --human: #0f766e; --genai: #9333ea;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  header { background: var(--card); border-bottom: 1px solid var(--line); }
+  .wrap { max-width: 72rem; margin: 0 auto; padding: 0 1rem; }
+  header .wrap { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; padding-top: .9rem; padding-bottom: .9rem; }
+  h1 { font-size: 1.25rem; margin: 0; }
+  h2 { font-size: 1.15rem; margin: 2.25rem 0 .25rem; }
+  h3 { font-size: .95rem; margin: 0 0 .5rem; }
+  p.lead { color: var(--soft); margin: 0 0 1rem; max-width: 60rem; }
+  a { color: var(--blue); }
+  .warn { background: #fffbeb; border-left: 4px solid #f59e0b; padding: .6rem .9rem; margin: 1rem 0 0; color: #78350f; }
+  .btn { display: inline-block; background: var(--blue); color: #fff; padding: .45rem .9rem; border-radius: .4rem; text-decoration: none; font-weight: 600; }
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr)); gap: .75rem; margin-top: 1rem; }
+  .kpi, .card { background: var(--card); border: 1px solid var(--line); border-radius: .6rem; box-shadow: 0 1px 2px rgb(0 0 0 / .05); }
+  .kpi { padding: .8rem 1rem; }
+  .kpi b { display: block; font-size: 1.7rem; line-height: 1.2; font-variant-numeric: tabular-nums; }
+  .kpi span { color: var(--faint); font-size: .85rem; }
+  .card { padding: 1rem; }
+  .scroll { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+  th, td { text-align: left; padding: .45rem .6rem; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  th { font-size: .8rem; color: var(--faint); font-weight: 600; }
+  td.num, th.num { text-align: right; }
+  tr:last-child td { border-bottom: 0; }
+  .bar { position: relative; width: 11rem; height: .7rem; background: #f3f4f6; border-radius: 1rem; }
+  .bar i { position: absolute; inset: 0 auto 0 0; background: var(--blue); border-radius: 1rem; }
+  .bar u { position: absolute; left: 50%; top: -.2rem; bottom: -.2rem; width: 2px; background: var(--ink); opacity: .45; }
+  .pill { display: inline-block; padding: .05rem .5rem; border-radius: 1rem; font-size: .8rem; font-weight: 600; }
+  .ok { background: var(--ok-soft); color: var(--ok); } .bad { background: var(--bad-soft); color: var(--bad); }
+  .tag { background: var(--blue-soft); color: #1e40af; }
+  .off { background: #f3f4f6; color: var(--faint); }
+  .grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr)); gap: .75rem; }
+  .pairs { display: grid; grid-template-columns: repeat(auto-fill, minmax(21rem, 1fr)); gap: .75rem; }
+  .pair { display: grid; grid-template-columns: 6.5rem 1fr; gap: .8rem; }
+  .pair img { width: 6.5rem; height: auto; image-rendering: pixelated; border-radius: .3rem; }
+  .pair .meta { display: flex; gap: .4rem; flex-wrap: wrap; align-items: center; margin-bottom: .4rem; }
+  .track { margin-top: .45rem; font-size: .82rem; color: var(--soft); }
+  .track b.h { color: var(--human); } .track b.g { color: var(--genai); }
+  .track code { font-size: .78rem; word-break: break-all; white-space: normal; }
+  audio { display: block; width: 100%; height: 2rem; margin-top: .15rem; }
+  .muted { color: var(--faint); }
+  dl.dist { display: grid; grid-template-columns: 1fr auto; gap: .15rem .75rem; margin: 0; }
+  dl.dist dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
+  .comment { border-bottom: 1px solid var(--line); padding: .5rem 0; } .comment:last-child { border: 0; }
+  footer { color: var(--faint); font-size: .8rem; padding: 2rem 0; }
+</style>
+</head>
+<body>
+{% macro pct(x) %}{% if x is none %}–{% else %}{{ "%.0f"|format(x * 100) }}%{% endif %}{% endmacro %}
+<header>
+  <div class="wrap">
+    <h1>PICO-8 · painel dos pesquisadores</h1>
+    <a class="btn" href="/admin/answers.csv">Baixar respostas (CSV)</a>
+  </div>
+</header>
+<main class="wrap">
+  <p class="warn">Esta página mostra o gabarito (qual faixa é a original). Não compartilhe prints nem o link com participantes.</p>
+
+  <h2>Coleta</h2>
+  <p class="lead">Pergunta ativa: <strong>{{ question }}</strong></p>
+  <div class="kpis">
+    <div class="kpi"><b>{{ totals.registered }}</b><span>e-mails registrados</span></div>
+    <div class="kpi"><b>{{ totals.started }}</b><span>responderam ao menos um par</span></div>
+    <div class="kpi"><b>{{ totals.finished }}</b><span>responderam todos os pares</span></div>
+    <div class="kpi"><b>{{ totals.completed }}</b><span>concluíram com o perfil</span></div>
+    <div class="kpi"><b>{{ totals.answers }}</b><span>respostas, de {{ totals.assigned }} pares sorteados</span></div>
+    <div class="kpi"><b>{% if totals.median_time is none %}–{% else %}{{ totals.median_time }} s{% endif %}</b><span>tempo mediano por par</span></div>
+  </div>
+  {% if days %}
+  <div class="card scroll" style="margin-top:.75rem">
+    <h3>Respostas por dia (UTC)</h3>
+    <table><tr>{% for d, n in days %}<th class="num">{{ d }}</th>{% endfor %}</tr><tr>{% for d, n in days %}<td class="num">{{ n }}</td>{% endfor %}</tr></table>
+  </div>
+  {% endif %}
+
+  <h2>Resultado</h2>
+  <p class="lead">Fração das respostas que escolheram a música <strong>original</strong> do jogo. 50% é empate entre original e gerada (o traço na barra). O intervalo é o de Wilson a 95% e o p é o do teste binomial exato contra 50%. Respostas de um mesmo participante não são independentes, então trate o p como indicativo; a análise final usa o modelo misto sobre o CSV.</p>
+  {% for block in results %}
+  <div class="card scroll" style="margin-bottom:.75rem">
+    <h3>{{ block.label }}</h3>
+    <table>
+      <tr><th>Recorte</th><th class="num">Respostas</th><th class="num">Escolheram a original</th><th></th><th class="num">IC 95%</th><th class="num">p</th></tr>
+      {% for row in block.rows %}
+      <tr>
+        <td>{{ row.label }}</td><td class="num">{{ row.n }}</td><td class="num">{{ pct(row.share) }}</td>
+        <td><div class="bar">{% if row.share is not none %}<i style="width:{{ "%.1f"|format(row.share * 100) }}%"></i>{% endif %}<u></u></div></td>
+        <td class="num">{% if row.ci %}{{ pct(row.ci[0]) }} a {{ pct(row.ci[1]) }}{% else %}–{% endif %}</td>
+        <td class="num">{% if row.p is none %}–{% elif row.p < 0.001 %}&lt; 0,001{% else %}{{ ("%.3f"|format(row.p))|replace(".", ",") }}{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </table>
+  </div>
+  {% endfor %}
+
+  <h2>Conferência do catálogo</h2>
+  <p class="lead">Catálogo gerado em {{ catalog.created_at }}, clipes de {{ catalog.clip_seconds|round|int }} s, semente {{ catalog.seed }}. Modelo das geradas: <code>{{ catalog.generated.system }}</code> ({{ catalog.generated.job }}).</p>
+  <div class="card scroll">
+    <table>
+      <tr><th>Verificação</th><th>Situação</th><th>Detalhe</th></tr>
+      {% for c in checks %}
+      <tr><td>{{ c.name }}</td><td><span class="pill {{ 'ok' if c.ok else 'bad' }}">{{ 'OK' if c.ok else 'ERRO' }}</span></td><td style="white-space:normal">{{ c.detail }}</td></tr>
+      {% endfor %}
+    </table>
+  </div>
+
+  <h2>Pares</h2>
+  <p class="lead">Cada par é um jogo do conjunto de teste, sua música original e uma música gerada com a mesma tag. "Sorteios" é quantas vezes o par foi entregue a um participante.</p>
+  <div class="pairs">
+    {% for c in cards %}
+    <div class="card pair">
+      <a href="{{ c.pair.game_url or '#' }}" target="_blank" rel="noopener noreferrer"><img src="/api/images/{{ c.pair.image_id }}.webp" alt="Cartucho do jogo {{ c.pair.game_tid }}" loading="lazy"></a>
+      <div>
+        <div class="meta">
+          <span class="pill tag">{{ c.pair.tag }}</span>
+          {% if c.pair.role == 'anchor' %}<span class="pill off">controle</span>{% endif %}
+          {% if not c.pair.active %}<span class="pill off">fora do catálogo</span>{% endif %}
+          <span class="muted">jogo {{ c.pair.game_tid }} · {{ c.pair.license or 'licença desconhecida' }}</span>
+        </div>
+        <div><strong>{{ pct(c.share) }}</strong> escolheram a original <span class="muted">· {{ c.n }} respostas · {{ c.pair.count }} sorteios{% if c.similarity is not none %} · CLAP {{ "%.2f"|format(c.similarity) }}{% endif %}</span></div>
+        <div class="track"><b class="h">Original</b> <code>{{ c.human.source_id }}</code><audio controls preload="none" src="/api/audio/{{ c.pair.human_id }}.mp3"></audio></div>
+        <div class="track"><b class="g">Gerada</b> <code>{{ c.genai.source_id }}</code><audio controls preload="none" src="/api/audio/{{ c.pair.genai_id }}.mp3"></audio></div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <h2>Participantes</h2>
+  <p class="lead">{{ profile.n }} perfis completos{% if profile.age %}, idade média {{ profile.age[0] }} e mediana {{ profile.age[1] }}{% endif %}{% if profile.n %}; {{ profile.knows_ai }} conhecem ferramentas de música por IA{% endif %}.</p>
+  <div class="grid2">
+    <div class="card"><h3>Experiência prática</h3><dl class="dist">{% for l, n in profile.practical %}<dt>{{ l }}</dt><dd>{{ n }}</dd>{% endfor %}</dl></div>
+    <div class="card"><h3>Formação musical</h3><dl class="dist">{% for l, n in profile.formal %}<dt>{{ l }}</dt><dd>{{ n }}</dd>{% endfor %}</dl></div>
+    <div class="card"><h3>Familiaridade com chiptune</h3><dl class="dist">{% for l, n in profile.chiptune %}<dt>{{ l }}</dt><dd>{{ n }}</dd>{% endfor %}</dl></div>
+    <div class="card"><h3>Idioma</h3><dl class="dist">{% for l, n in profile.language %}<dt>{{ l }}</dt><dd>{{ n }}</dd>{% else %}<dt class="muted">sem dados</dt><dd></dd>{% endfor %}</dl></div>
+    <div class="card"><h3>Conhecia o jogo ou a música (por resposta)</h3><dl class="dist">{% for l, n in familiarity %}<dt>{{ l }}</dt><dd>{{ n }}</dd>{% endfor %}</dl></div>
+  </div>
+
+  <h2>Comentários</h2>
+  <div class="card">
+    {% for r in comments %}
+    <div class="comment"><span class="pill tag">{{ r.pair.tag }}</span> <span class="muted">jogo {{ r.pair.game_tid }} · escolheu a {{ 'original' if r.chose_human else 'gerada' }} · {{ r.answered_at.strftime('%d/%m %H:%M') }}</span><br>{{ r.comments }}</div>
+    {% else %}
+    <span class="muted">Nenhum comentário ainda.</span>
+    {% endfor %}
+  </div>
+  <footer>Horários em UTC. Os participantes são identificados só por um HMAC do e-mail.</footer>
+</main>
+</body>
+</html>
